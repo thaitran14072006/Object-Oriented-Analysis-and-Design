@@ -1,50 +1,21 @@
 import { useState } from 'react'
-import { Badge, PageHeader, SearchBar, StatCard, Table } from '../components'
-
+import { PageHeader, Table } from '../components'
+import { api, EntryForm, useRecords, money, type Field } from './billingApi'
+const f = (key:string,label:string,type?:string):Field=>({key,label,type})
+const feeFields: Field[] = [1,2,3].flatMap(n=>[{key:`fee${n}`,label:`Mã phụ phí ${n}`,optional:true},{key:`qty${n}`,label:`Số lượng hoặc giờ trễ ${n}`,type:'number',optional:true}])
+const feeValues = (v: any) => [1,2,3].filter(n=>v[`fee${n}`]).map(n=>({id:v[`fee${n}`],quantity:v[`qty${n}`]}))
 export function Payments() {
-  const [query, setQuery] = useState('')
-  const payments = [
-    ['TT001', 'HD001', 'Nguyễn Văn An', '6,000,000 ₫', 'Chuyển khoản', '18/09/2026', <Badge label="Đã thanh toán" color="green" />],
-    ['TT002', 'HD002', 'Trần Thị Bình', '5,400,000 ₫', 'Tiền mặt', '20/09/2026', <Badge label="Đã thanh toán" color="green" />],
-    ['TT003', 'HD003', 'Lê Minh Cường', '9,600,000 ₫', 'Chuyển khoản', '—', <Badge label="Chờ thanh toán" color="yellow" />],
-    ['TT004', 'HD005', 'Võ Thị Em', '6,800,000 ₫', 'Ví điện tử', '—', <Badge label="Chờ thanh toán" color="yellow" />],
-    ['TT005', 'HD006', 'Đặng Văn Phúc', '10,000,000 ₫', '—', '—', <Badge label="Chờ xác nhận" color="gray" />],
-  ]
-
-  return (
-    <div>
-      <PageHeader title="Quản lý giá thuê & thanh toán" desc="Theo dõi tình trạng thanh toán các hợp đồng" action="Ghi nhận thanh toán" />
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-        <StatCard label="Doanh thu tháng 9" value="₫186M" sub="↑ 12% so với T8" accent />
-        <StatCard label="Đã thu" value="₫179M" sub="96.2% hóa đơn" />
-        <StatCard label="Chờ thanh toán" value="₫7M" sub="7 hợp đồng" />
-      </div>
-
-      {/* Pricing table */}
-      <div className="bg-white rounded-xl border border-[#E4E4E7] p-5 mb-5">
-        <h3 className="text-sm font-semibold font-mono uppercase tracking-wider text-[#18181B] mb-3">Bảng giá hiện hành</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            { type: 'Sedan', price: '1,000,000–1,500,000 ₫' },
-            { type: 'SUV', price: '1,200,000–2,000,000 ₫' },
-            { type: 'MPV', price: '900,000–1,200,000 ₫' },
-            { type: 'Pickup', price: '1,100,000–1,400,000 ₫' },
-          ].map((p, i) => (
-            <div key={i} className="bg-[#F5F5F3] rounded-lg p-3">
-              <p className="text-xs text-[#71717A] font-mono">{p.type}</p>
-              <p className="text-sm font-semibold text-[#18181B] mt-1">{p.price}</p>
-              <p className="text-xs text-[#71717A]">/ ngày</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <SearchBar placeholder="Tìm theo mã thanh toán, hợp đồng, khách hàng..." query={query} onChange={setQuery} />
-      <Table
-        headers={['Mã TT', 'Mã HĐ', 'Khách hàng', 'Số tiền', 'Phương thức', 'Ngày TT', 'Trạng thái']}
-        rows={payments}
-        query={query}
-      />
-    </div>
-  )
+ const rates=useRecords('billing/rates'), fees=useRecords('billing/surcharges'), invoices=useRecords('billing/invoices'), payments=useRecords('billing/payments'), complaints=useRecords('billing/complaints')
+ const [min,setMin]=useState(0),[max,setMax]=useState(1000000000)
+ const [tab,setTab]=useState('Hóa đơn'), [notice,setNotice]=useState('')
+ const reload=async()=>{await Promise.all([rates.reload(),fees.reload(),invoices.reload(),payments.reload(),complaints.reload()])}
+ async function write(path:string,body:unknown,method='POST'){await api(path,method,body);await reload()}
+ async function remove(path:string){if(!confirm('Xác nhận xóa? Dữ liệu đã sử dụng sẽ được ngừng sử dụng.'))return;try{await api(path,'DELETE');await reload()}catch(e){setNotice((e as Error).message)}}
+ return <div><PageHeader title="Giá thuê và thanh toán" desc="Quản lý bảng giá, hóa đơn, khoản thu và phản ánh" /><div className="flex gap-2 flex-wrap">{['Hóa đơn','Bảng giá','Phụ phí','Khoản thu','Phản ánh'].map(t=><button key={t} onClick={()=>setTab(t)} className={`px-3 py-2 rounded ${tab===t?'bg-teal-700 text-white':'bg-white'}`}>{t}</button>)}</div><p role="alert" className="text-red-700 my-3">{rates.error||invoices.error||notice}</p>
+ {tab==='Bảng giá'&&<><div className="flex gap-3 my-3"><label>Giá từ<input aria-label="Giá từ" type="number" value={min} onChange={e=>setMin(Number(e.target.value))} className="border p-2"/></label><label>Giá đến<input aria-label="Giá đến" type="number" value={max} onChange={e=>setMax(Number(e.target.value))} className="border p-2"/></label></div><Table headers={['Mã','Loại xe','Đơn vị','Giá','Hiệu lực','Thao tác']} rows={rates.rows.filter(r=>r.amount>=min&&r.amount<=max).map(r=>[r.id,r.vehicle,r.unit,money(r.amount),`${r.start} → ${r.end}`,<button onClick={()=>void remove('billing/rates/'+r.id)}>Xóa / Ngừng</button>])}/><EntryForm title="Thêm mức giá" fields={[f('id','Mã mức giá'),f('vehicle','Mã loại xe'),{key:'unit',label:'Đơn vị',options:['NGAY','GIO']},{key:'form',label:'Hình thức',options:['NGAN_HAN','DAI_HAN']},f('season','Mùa vụ'),f('amount','Đơn giá','number'),f('start','Bắt đầu','datetime-local'),f('end','Kết thúc','datetime-local')]} submit={v=>write('billing/rates',v)}/><p className="text-sm">Sửa giá bằng cách nhập lại đủ thông tin cùng mã bên dưới.</p><EntryForm title="Cập nhật mức giá" fields={[f('id','Mã mức giá'),f('vehicle','Mã loại xe'),{key:'unit',label:'Đơn vị',options:['NGAY','GIO']},{key:'form',label:'Hình thức',options:['NGAN_HAN','DAI_HAN']},f('season','Mùa vụ'),f('amount','Giá','number'),f('start','Bắt đầu','datetime-local'),f('end','Kết thúc','datetime-local')]} submit={v=>write('billing/rates/'+v.id,v,'PUT')}/></>}
+ {tab==='Phụ phí'&&<><Table headers={['Mã','Tên','Cách tính','Mức phí','Thao tác']} rows={fees.rows.map(r=>[r.id,r.name,r.calculation,money(r.amount),<button onClick={()=>void remove('billing/surcharges/'+r.id)}>Xóa / Ngừng</button>])}/>{[false,true].map(edit=><EntryForm key={String(edit)} title={edit?'Sửa phụ phí':'Thêm phụ phí'} fields={[f('id','Mã phụ phí'),f('name','Tên phụ phí'),{key:'calculation',label:'Cách tính',options:['CO_DINH','THEO_GIO_TRE']},f('amount','Mức phí','number')]} submit={v=>write('billing/surcharges'+(edit?'/'+v.id:''),v,edit?'PUT':'POST')}/>)}</>}
+ {tab==='Hóa đơn'&&<><Table headers={['Mã','Đơn','Tiền thuê','Phụ phí','Giảm','Tổng','Đã thu','Còn thu','Phiên bản']} rows={invoices.rows.map(i=>[i.id,i.booking,money(i.rent),money(i.fees),money(i.discount),money(i.total),money(i.paid),money(i.total-i.paid),String(i.version)])}/><p className="my-3 text-sm">Hóa đơn được lập từ đơn thuê đã lưu. Đơn giá và ưu đãi được chốt theo dữ liệu đơn.</p><EntryForm title="Áp dụng ưu đãi cho đơn trước khi lập hóa đơn" fields={[f('booking','Mã đơn'),f('rateId','Mã mức giá'),f('start','Nhận dự kiến','datetime-local'),f('end','Trả dự kiến','datetime-local'),f('promotionCode','Mã ưu đãi'),{...f('group','Mã nhóm khách'),optional:true},{...f('season','Mùa vụ'),optional:true}]} submit={v=>write(`billing/bookings/${v.booking}/promotion`,{...v,fees:[]})}/><EntryForm title="Lập hóa đơn" fields={[f('booking','Mã đơn'),f('rateId','Mã mức giá'),f('start','Nhận dự kiến','datetime-local'),f('end','Trả dự kiến','datetime-local'),{...f('promotionCode','Mã khuyến mãi'),optional:true},{...f('group','Nhóm khách'),optional:true},{...f('season','Mùa vụ'),optional:true},...feeFields]} submit={v=>write('billing/invoices',{booking:v.booking,quote:{...v,promotionCode:v.promotionCode||null,fees:feeValues(v)}})}/><EntryForm title="Báo giá tham khảo" fields={[f('rateId','Mã mức giá'),f('start','Nhận dự kiến','datetime-local'),f('end','Trả dự kiến','datetime-local'),{...f('promotionCode','Mã khuyến mãi'),optional:true},{...f('group','Mã nhóm khách'),optional:true},{...f('season','Mùa vụ'),optional:true},...feeFields]} submit={async v=>{const q=await api('billing/quote','POST',{...v,promotionCode:v.promotionCode||null,fees:feeValues(v)});setNotice(`Báo giá: thuê ${money(q.rent)}, phụ phí ${money(q.fees)}, giảm ${money(q.discount)}, tổng ${money(q.total)}`)}}/><EntryForm title="Tính lại hóa đơn khi đổi lịch" fields={[f('id','Mã hóa đơn'),f('version','Phiên bản','number'),f('start','Nhận dự kiến','datetime-local'),f('end','Trả dự kiến','datetime-local')]} submit={v=>write(`billing/invoices/${v.id}/adjust`,{...v,fees:null})}/></>}
+ {tab==='Khoản thu'&&<><Table headers={['Mã','Đơn','Loại','Số tiền','Phương thức','Thời điểm']} rows={payments.rows.map(p=>[p.id,p.booking,p.kind,money(p.amount),p.method,p.created])}/><EntryForm title="Ghi đặt cọc hoặc thanh toán" fields={[f('id','Mã hóa đơn'),f('version','Phiên bản hóa đơn','number'),f('amount','Số tiền','number'),{key:'kind',label:'Loại khoản',options:['DAT_COC','THANH_TOAN']},{key:'method',label:'Phương thức',options:['TIEN_MAT','CHUYEN_KHOAN','KHAC']},f('requestId','Mã giao dịch duy nhất')]} submit={v=>write(`billing/invoices/${v.id}/payments`,v)}/></>}
+ {tab==='Phản ánh'&&<><Table headers={['Mã','Hóa đơn','Khoản phí','Nội dung','Trạng thái','Giải quyết']} rows={complaints.rows.map(c=>[String(c.id),c.invoiceId,c.item,c.content,c.status,c.resolution||'—'])}/><EntryForm title="Tiếp nhận phản ánh" fields={[f('invoiceId','Mã hóa đơn'),{key:'channel',label:'Kênh',options:['TrucTiep','DienThoai']},f('item','Khoản bị phản ánh'),f('content','Nội dung')]} submit={v=>write('billing/complaints',v)}/><EntryForm title="Giải quyết phản ánh và điều chỉnh chi phí" fields={[f('id','Mã phản ánh'),f('resolution','Nội dung giải quyết'),f('version','Phiên bản hóa đơn','number'),f('start','Nhận dự kiến hiện tại','datetime-local'),f('end','Trả dự kiến hiện tại','datetime-local'),...feeFields]} submit={v=>write(`billing/complaints/${v.id}/resolve`,{resolution:v.resolution,adjustment:{version:v.version,start:v.start,end:v.end,fees:feeValues(v)}})}/><EntryForm title="Giải quyết và giữ nguyên hóa đơn" fields={[f('id','Mã phản ánh'),f('resolution','Nội dung giải quyết')]} submit={v=>write(`billing/complaints/${v.id}/resolve`,v)}/></>}
+ </div>
 }

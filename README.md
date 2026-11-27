@@ -51,3 +51,7 @@ Giao diện React được chuyển từ Figma Make. Mỗi màn hình nằm tron
 Mỗi mô-đun đặt controller và view trong `Controllers/` và `Views/`, đặt xử lý nghiệp vụ trong `Services/`. Các mô-đun sở hữu bảng đặt mô hình và ánh xạ EF Core trong `Data/`. `Settings/` dùng dữ liệu từ `Identity/`. `RentalSchedule/` dùng dữ liệu từ `Bookings/` và gọi xử lý tính lại chi phí của `Billing/`.
 
 Script SQL là nguồn quản lý cấu trúc cơ sở dữ liệu. Ánh xạ EF Core theo tên và ràng buộc bảng ở mục 1.6 của báo cáo. Giữ tệp `.gitkeep` ở thư mục rỗng cho đến khi có mã nguồn, kiểm thử hoặc tài liệu tương ứng.
+
+### Phần giá thuê, thanh toán và khuyến mãi
+
+Phần của Phạm Quỳnh Như có API SQL Server, giao diện ghi dữ liệu và kiểm thử giao dịch thực tế. Xem [hướng dẫn tích hợp và chạy kiểm thử](docs/deployment/billing-promotions.md). Cấu hình `ConnectionStrings__CarRental` và chạy các script SQL theo thứ tự mô-đun. Các API cần cookie Admin từ phần Identity; dữ liệu khách, loại xe và đơn thuê do mô-đun tương ứng cung cấp. Những màn hình còn lại vẫn sử dụng dữ liệu mẫu như mô tả ở trên.

@@ -1,46 +1,6 @@
-import { Badge, PageHeader, Table } from '../components'
-
+import { PageHeader, Table } from '../components'
+import { api, EntryForm, useRecords } from './billingApi'
 export function Promotions() {
-  const promos = [
-    ['KM001', 'Khuyến mãi tháng 9', 'Giảm 15% cho khách thuê từ 5 ngày', '01/09/2026', '30/09/2026', '15%', <Badge label="Đang áp dụng" color="teal" />],
-    ['KM002', 'Ưu đãi VIP', 'Giảm 20% cho khách VIP', 'Không giới hạn', '—', '20%', <Badge label="Đang áp dụng" color="teal" />],
-    ['KM003', 'Cuối tuần giảm giá', 'Giảm 10% thuê T7, CN', '01/01/2026', '31/12/2026', '10%', <Badge label="Đang áp dụng" color="teal" />],
-    ['KM004', 'Flash sale Q4', 'Giảm 25% tháng 10–12', '01/10/2026', '31/12/2026', '25%', <Badge label="Sắp bắt đầu" color="blue" />],
-    ['KM005', 'Tết Dương lịch', 'Giảm 30% 28/12–02/01', '28/12/2026', '02/01/2027', '30%', <Badge label="Sắp bắt đầu" color="blue" />],
-  ]
-
-  const reviews = [
-    ['DG001', 'Nguyễn Văn An', 'Toyota Camry', '5/5 ⭐', 'Xe rất sạch, dịch vụ tốt, sẽ quay lại!', '20/09/2026'],
-    ['DG002', 'Trần Thị Bình', 'Honda CR-V', '4/5 ⭐', 'Nhân viên nhiệt tình, xe chạy êm.', '18/09/2026'],
-    ['DG003', 'Lê Minh Cường', 'Mazda CX-5', '5/5 ⭐', 'Giá hợp lý, xe đẹp, thủ tục nhanh.', '15/09/2026'],
-  ]
-
-  return (
-    <div>
-      <PageHeader title="Quản lý khuyến mãi & đánh giá" desc="Chương trình ưu đãi và phản hồi khách hàng" action="Tạo khuyến mãi" />
-      <Table
-        headers={['Mã KM', 'Tên chương trình', 'Mô tả', 'Bắt đầu', 'Kết thúc', 'Giảm giá', 'Trạng thái']}
-        rows={promos}
-      />
-      <h2 className="text-sm font-semibold font-mono uppercase tracking-wider text-[#18181B] mt-6 mb-3">Đánh giá gần đây</h2>
-      <div className="grid grid-cols-1 gap-3">
-        {reviews.map((r, i) => (
-          <div key={i} className="bg-white rounded-xl border border-[#E4E4E7] p-4 flex gap-4">
-            <div className="w-8 h-8 rounded-full bg-[#CCFBF1] flex items-center justify-center text-[#0F766E] font-bold text-sm font-display flex-shrink-0">
-              {r[1].charAt(0)}
-            </div>
-            <div className="flex-1">
-              <div className="flex flex-wrap items-center gap-2 mb-1">
-                <span className="font-medium text-sm text-[#18181B]">{r[1]}</span>
-                <span className="text-xs text-[#71717A] font-mono">{r[2]}</span>
-                <span className="text-xs font-mono">{r[3]}</span>
-              </div>
-              <p className="text-sm text-[#52525B]">{r[4]}</p>
-              <p className="text-xs text-[#71717A] font-mono mt-1">{r[5]}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
+ const p=useRecords('promotions')
+ return <div><PageHeader title="Quản lý khuyến mãi" desc="Chương trình, vòng đời và điều kiện áp dụng"/><p role="alert">{p.error}</p><Table headers={['Mã','Tên','Hình thức','Mức giảm','Bắt đầu','Kết thúc','Trạng thái']} rows={p.rows.map(r=>[r.id,r.name,r.kind,String(r.value),r.start,r.end,r.status])}/>{[false,true].map(edit=><EntryForm key={String(edit)} title={edit?'Cập nhật hoặc kết thúc chương trình':'Tạo chương trình'} fields={[{key:'id',label:'Mã ưu đãi'},{key:'name',label:'Tên chương trình'},{key:'kind',label:'Hình thức',options:['PHAN_TRAM','SO_TIEN']},{key:'value',label:'Mức giảm',type:'number'},{key:'start',label:'Bắt đầu',type:'datetime-local'},{key:'end',label:'Kết thúc',type:'datetime-local'},{key:'status',label:'Trạng thái',options:['SapApDung','DangApDung','TamNgung','DaKetThuc']}]} submit={async v=>{await api('promotions'+(edit?'/'+v.id:''),edit?'PUT':'POST',v);await p.reload()}}/>)}<EntryForm title="Thiết lập điều kiện nhóm khách hoặc mùa vụ" fields={[{key:'id',label:'Mã khuyến mãi'},{key:'kind',label:'Loại điều kiện',options:['NHOM_KHACH','MUA_VU']},{key:'value',label:'Mã nhóm hoặc mùa vụ'}]} submit={v=>api(`promotions/${v.id}/conditions`,'PUT',[{kind:v.kind,group:v.kind==='NHOM_KHACH'?v.value:null,season:v.kind==='MUA_VU'?v.value:null}])}/><EntryForm title="Thiết lập điều kiện thời điểm" fields={[{key:'id',label:'Mã khuyến mãi'},{key:'start',label:'Từ lúc',type:'datetime-local'},{key:'end',label:'Đến lúc',type:'datetime-local'}]} submit={v=>api(`promotions/${v.id}/conditions`,'PUT',[{kind:'THOI_DIEM',start:v.start,end:v.end}])}/><p className="text-sm">Lưu điều kiện sẽ thay bộ điều kiện hiện tại của chương trình.</p><EntryForm title="Xóa chương trình chưa áp dụng" fields={[{key:'id',label:'Mã khuyến mãi'}]} submit={async v=>{if(!confirm('Xác nhận xóa chương trình?'))return;await api('promotions/'+v.id,'DELETE');await p.reload()}}/></div>
 }
