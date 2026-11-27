@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/CarRental.Web/CarRental.Web.csproj" />
+    <None Include="../../database/migrations/01_identity/01_identity.sql" Link="01_identity.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../database/migrations/03_customers/03_customers.sql" Link="03_customers.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
