@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 
 export async function request<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`/api/${path}`, { method, signal, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
+  const headers: Record<string,string> = { 'Content-Type': 'application/json' }; if(method!=='GET'){const r=await fetch('/api/identity/csrf',{signal,cache:'no-store'});if(!r.ok)throw Error('Không lấy được mã xác thực yêu cầu.');headers['X-CSRF-TOKEN']=(await r.json()).token}
+  const response = await fetch(`/api/${path}`, { method, signal, headers, body: body === undefined ? undefined : JSON.stringify(body) })
   if (response.status === 401) throw Error('Vui lòng đăng nhập tài khoản quản trị.')
   if (response.status === 403) throw Error('Bạn chưa có quyền thực hiện thao tác này.')
   const data = await response.json().catch(() => ({}))

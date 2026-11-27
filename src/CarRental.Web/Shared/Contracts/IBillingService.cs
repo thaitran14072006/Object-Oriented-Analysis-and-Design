@@ -9,8 +9,8 @@ public record Cost(decimal Rent, decimal Fees, decimal Discount) { public decima
 public interface IBillingService
 {
     Task<Cost> Quote(QuoteRequest request);
+    Task<object> Apply(string bookingId, QuoteRequest request);
     Task<object> Create(InvoiceRequest request, string admin);
     Task<object> Pay(string id, PaymentRequest request, string admin);
     Task<object> Adjust(string id, AdjustmentRequest request);
 }
-

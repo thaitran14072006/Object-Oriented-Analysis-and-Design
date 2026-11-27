@@ -19,14 +19,18 @@ public class BillingService(RentalDbContext db) : IBillingService
     {
         var rate = await db.Rates.FindAsync(q.RateId) ?? throw new BusinessError("Không tìm thấy mức giá."); Require(booking != null || rate.Active && q.Start >= rate.Start && q.Start < rate.End, "Mức giá hết hiệu lực tại giờ nhận xe.");
         var rent = Rental(booking?.UnitPrice ?? rate.Amount, booking?.Unit ?? rate.Unit, q.Start, q.End); var fees = await Fees(q.Fees); Promotion? promo = null; decimal discount = 0;
-        if (!string.IsNullOrWhiteSpace(q.PromotionCode)) { var code = q.PromotionCode.Trim().ToUpperInvariant(); promo = await db.Promotions.SingleOrDefaultAsync(x => x.Id == code); Require(promo != null, "Mã khuyến mãi không tồn tại."); Require(promo!.Status == "DangApDung" && q.Start >= promo.Start && q.Start < promo.End && DateTime.UtcNow >= promo.Start && DateTime.UtcNow < promo.End, "Khuyến mãi chưa hoặc hết hiệu lực."); var rules = await db.Conditions.Where(x => x.PromotionId == promo.Id).ToListAsync(); Require(rules.All(x => x.Kind == "NHOM_KHACH" ? x.Group == q.Group : x.Kind == "MUA_VU" ? x.Season == q.Season : x.Kind == "THOI_DIEM" && q.Start >= x.Start && q.Start < x.End), "Đơn chưa đáp ứng điều kiện ưu đãi."); discount = promo.Kind == "PHAN_TRAM" ? decimal.Round(rent * promo.Value / 100, 2) : promo.Value; discount = Math.Min(rent, discount); }
+        if (!string.IsNullOrWhiteSpace(q.PromotionCode))
+        {
+            var code = q.PromotionCode.Trim().ToUpperInvariant(); promo = await db.Promotions.SingleOrDefaultAsync(x => x.Id == code); Require(promo != null, "Mã khuyến mãi không tồn tại."); Require(promo!.Status == "DangApDung" && q.Start >= promo.Start && q.Start < promo.End && DateTime.UtcNow >= promo.Start && DateTime.UtcNow < promo.End, "Khuyến mãi chưa hoặc hết hiệu lực."); var rules = await db.Conditions.Where(x => x.PromotionId == promo.Id).ToListAsync(); string? group = q.Group;
+            if (booking != null && rules.Any(x => x.Kind == "NHOM_KHACH")) group = await db.Database.SqlQuery<string>($"SELECT c.maNhom AS [Value] FROM DonThue d JOIN KhachHang c ON c.maKhachHang=d.maKhachHang WHERE d.maDon={booking.Id}").SingleOrDefaultAsync(); Require(rules.All(x => x.Kind == "NHOM_KHACH" ? x.Group == group : x.Kind == "MUA_VU" ? x.Season == rate.Season : x.Kind == "THOI_DIEM" && q.Start >= x.Start && q.Start < x.End), "Đơn chưa đáp ứng điều kiện ưu đãi."); discount = promo.Kind == "PHAN_TRAM" ? decimal.Round(rent * promo.Value / 100, 2) : promo.Value; discount = Math.Min(rent, discount);
+        }
         return (new Cost(rent, fees, discount), rate, promo);
     }
     public async Task<Cost> Quote(QuoteRequest q) => (await Calculate(q)).Cost;
     public async Task<object> Apply(string bookingId, QuoteRequest q)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        Require(!await db.Invoices.AnyAsync(x => x.Booking == bookingId), "Đơn đã có hóa đơn."); var b = await db.Bookings.AsNoTracking().SingleOrDefaultAsync(x => x.Id == bookingId) ?? throw new BusinessError("Không tìm thấy đơn."); Require(b.RateId == q.RateId && b.Start == q.Start && b.End == q.End, "Báo giá không khớp đơn."); var c = await Calculate(q, b); Require(c.Promo != null, "Chưa chọn mã ưu đãi."); Require(!await db.Applied.AnyAsync(x => x.Booking == bookingId), "Đơn đã áp dụng ưu đãi."); var a = new AppliedPromotion { Booking = bookingId, PromotionId = c.Promo!.Id, Kind = c.Promo.Kind, Value = c.Promo.Value, Discount = c.Cost.Discount, Applied = DateTime.UtcNow }; db.Add(a); await db.SaveChangesAsync(); await tx.CommitAsync(); return a;
+        var owns = db.Database.CurrentTransaction == null; await using var tx = owns ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        Require(!await db.Invoices.AnyAsync(x => x.Booking == bookingId), "Đơn đã có hóa đơn."); var b = await db.Bookings.AsNoTracking().SingleOrDefaultAsync(x => x.Id == bookingId) ?? throw new BusinessError("Không tìm thấy đơn."); Require(b.RateId == q.RateId && b.Start == q.Start && b.End == q.End, "Báo giá không khớp đơn."); var c = await Calculate(q, b); Require(c.Promo != null, "Chưa chọn mã ưu đãi."); Require(!await db.Applied.AnyAsync(x => x.Booking == bookingId), "Đơn đã áp dụng ưu đãi."); var a = new AppliedPromotion { Booking = bookingId, PromotionId = c.Promo!.Id, Kind = c.Promo.Kind, Value = c.Promo.Value, Discount = c.Cost.Discount, Applied = DateTime.UtcNow }; db.Add(a); await db.SaveChangesAsync(); if (tx != null) await tx.CommitAsync(); return a;
     }
     public async Task<object> Create(InvoiceRequest r, string admin)
     {
@@ -56,10 +60,3 @@ public class BillingService(RentalDbContext db) : IBillingService
         await db.SaveChangesAsync(); if (tx != null) await tx.CommitAsync(); return i;
     }
 }
-
-
-
-
-
-
-

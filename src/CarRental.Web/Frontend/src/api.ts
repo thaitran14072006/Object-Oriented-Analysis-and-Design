@@ -39,7 +39,7 @@ export async function api<T>(url: string, method = 'GET', body?: unknown, signal
   })
   if (!response.ok) {
     const result = await response.json().catch(() => null)
-    const message = result?.message ?? (response.status === 400
+    const message = result?.message ?? result?.error ?? (response.status === 400
       ? 'Dữ liệu hoặc phiên gửi yêu cầu không hợp lệ. Hãy kiểm tra và thử lại.'
       : 'Không xử lý được yêu cầu (' + response.status + ').')
     if (response.status === 401 && location.pathname !== '/login')

@@ -7,7 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 namespace CarRental.Web.Areas.Billing.Controllers;
 
-[ApiController, Route("api/billing"), Authorize(Policy = "BillingAdmin")]
+[ServiceFilter(typeof(CarRental.Web.Areas.Billing.Services.BillingAudit))]
+[ApiController, Route("api/billing"), Authorize(Policy = "Billing.Access")]
 public class BillingController(RentalDbContext db, IBillingService billing) : ControllerBase
 {
     string Admin => User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value;
@@ -23,7 +24,7 @@ public class BillingController(RentalDbContext db, IBillingService billing) : Co
     [HttpDelete("surcharges/{id}")] public async Task<object> DeleteFee(string id) { var r = await db.Surcharges.FindAsync(id) ?? throw new BusinessError("Không tìm thấy."); if (await db.InvoiceFees.AnyAsync(x => x.SurchargeId == id)) r.Active = false; else db.Remove(r); await db.SaveChangesAsync(); return r; }
     [HttpPost("quote")] public Task<Cost> Quote(QuoteRequest r) => billing.Quote(r);
     [HttpGet("invoices")] public async Task<object> Invoices() => await db.Invoices.AsNoTracking().Select(i => new { i.Id, i.Booking, i.Rent, i.Fees, i.Discount, i.Total, i.Version, Paid = db.Payments.Where(p => p.Booking == i.Booking).Sum(p => (decimal?)p.Amount) ?? 0 }).ToListAsync();
-    [HttpPost("bookings/{id}/promotion")] public Task<object> Apply(string id, QuoteRequest r) => ((BillingService)billing).Apply(id, r);
+    [HttpPost("bookings/{id}/promotion")] public Task<object> Apply(string id, QuoteRequest r) => billing.Apply(id, r);
     [HttpPost("invoices")] public Task<object> Create(InvoiceRequest r) => billing.Create(r, Admin);
     [HttpPost("invoices/{id}/payments")] public Task<object> Pay(string id, PaymentRequest r) => billing.Pay(id, r, Admin);
     [HttpPost("invoices/{id}/adjust")] public Task<object> Adjust(string id, AdjustmentRequest r) => billing.Adjust(id, r);
@@ -34,4 +35,3 @@ public class BillingController(RentalDbContext db, IBillingService billing) : Co
     public record ResolutionInput(string Resolution, AdjustmentRequest? Adjustment);
     [HttpPost("complaints/{id:long}/resolve")] public async Task<object> Resolve(long id, ResolutionInput r) { BillingService.Require(!string.IsNullOrWhiteSpace(r.Resolution), "Nhập nội dung giải quyết."); await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable); var c = await db.Complaints.FindAsync(id) ?? throw new BusinessError("Không tìm thấy phản ánh."); BillingService.Require(c.Status == "ChoXuLy", "Phản ánh đã xử lý."); if (r.Adjustment != null) await billing.Adjust(c.InvoiceId, r.Adjustment); c.Status = "DaXuLy"; c.Resolution = r.Resolution; c.Resolver = Admin; c.Resolved = DateTime.UtcNow; await db.SaveChangesAsync(); await tx.CommitAsync(); return c; }
 }
-

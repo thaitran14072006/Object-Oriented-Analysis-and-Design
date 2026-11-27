@@ -1,0 +1,22 @@
+import {useState} from 'react'
+import {api, useRecords, money} from './billingApi'
+export function BillingWorkspace(){
+ const bookings=useRecords('bookings'), invoices=useRecords('billing/invoices'), catalog=useRecords('billing/surcharges')
+ const [booking,setBooking]=useState(''),[code,setCode]=useState(''),[feeQty,setFeeQty]=useState<Record<string,string>>({}),[message,setMessage]=useState(''),[busy,setBusy]=useState(false)
+ const b=bookings.rows.find(x=>x.id===booking),i=invoices.rows.find(x=>x.booking===booking)
+ const [amount,setAmount]=useState(''),[kind,setKind]=useState('DAT_COC'),[method,setMethod]=useState('TIEN_MAT'),[requestId,setRequestId]=useState(crypto.randomUUID().replaceAll('-','').slice(0,30))
+ const fees=Object.entries(feeQty).filter(([,qty])=>qty!=='').map(([id,qty])=>({id,quantity:Number(qty)}))
+ async function run(action:()=>Promise<unknown>){setBusy(true);setMessage('');try{await action();await invoices.reload();setMessage('Đã lưu thành công.')}catch(e){setMessage((e as Error).message);await invoices.reload()}finally{setBusy(false)}}
+ const quote=()=>({rateId:b.rateId,start:b.start,end:b.end,fees,promotionCode:code||null})
+ return <section className="bg-white rounded-xl border p-5 my-4"><h2 className="font-semibold mb-3">Hóa đơn theo đơn thuê</h2><p role="alert">{bookings.error||invoices.error||catalog.error||message}</p>
+ <label className="block my-3">Chọn đơn thuê<select className="border rounded p-2 block w-full" value={booking} onChange={e=>{setBooking(e.target.value);setFeeQty({});setCode('');setAmount('');setMessage('');setRequestId(crypto.randomUUID().replaceAll('-','').slice(0,30))}}><option value="">Chọn đơn</option>{bookings.rows.filter(x=>!['Cancelled','Rejected'].includes(x.status)).map(x=><option key={x.id} value={x.id}>{x.id} — Xe {x.vehicle} — Khách {x.customer}</option>)}</select></label>
+ {b&&<><p>Nhận: {new Date(b.start).toLocaleString('vi-VN')} · Trả: {new Date(b.end).toLocaleString('vi-VN')}</p><p>Giá đã chốt: {money(b.unitPrice)} / {b.unit==='NGAY'?'ngày':'giờ'}</p>
+ {!i?<><label className="block my-3">Mã khuyến mãi<input className="border rounded p-2 ml-2" value={code} onChange={e=>setCode(e.target.value.toUpperCase())}/></label><button disabled={busy||!code} className="border rounded px-3 py-2" onClick={()=>void run(()=>api(`billing/bookings/${b.id}/promotion`,'POST',quote()))}>Áp dụng ưu đãi</button>
+ <fieldset className="my-3"><legend>Phụ phí phát sinh</legend>{catalog.rows.filter(x=>x.active).map(f=><label key={f.id} className="block my-2">{f.name} — {money(f.amount)} / {f.calculation==='THEO_GIO_TRE'?'giờ trễ':'lần'}<input aria-label={'Số lượng '+f.name} className="border rounded p-2 ml-2 w-28" type="number" min="0" step="0.01" placeholder="Không áp dụng" value={feeQty[f.id]??''} onChange={e=>setFeeQty({...feeQty,[f.id]:e.target.value})}/></label>)}</fieldset>
+ <button disabled={busy} className="bg-teal-700 text-white rounded px-3 py-2" onClick={()=>void run(()=>api('billing/invoices','POST',{booking:b.id,quote:quote()}))}>Lập hóa đơn</button></>:<><div className="grid sm:grid-cols-3 gap-3 my-4"><p>Tổng: <strong>{money(i.total)}</strong></p><p>Đã thu: {money(i.paid)}</p><p>Còn thu: <strong>{money(i.total-i.paid)}</strong></p></div><p>Hóa đơn {i.id} · Tiền thuê {money(i.rent)} · Phụ phí {money(i.fees)} · Giảm {money(i.discount)}</p>
+ <form className="flex flex-wrap gap-3 my-4" onSubmit={e=>{e.preventDefault();void run(async()=>{await api(`billing/invoices/${i.id}/payments`,'POST',{version:i.version,amount:Number(amount),kind,method,requestId});setAmount('');setRequestId(crypto.randomUUID().replaceAll('-','').slice(0,30))})}}>
+ <label>Số tiền<input required type="number" min="0.01" max={i.total-i.paid} step="0.01" value={amount} onChange={e=>setAmount(e.target.value)} className="border p-2 block"/></label><label>Loại khoản<select value={kind} onChange={e=>setKind(e.target.value)} className="border p-2 block"><option value="DAT_COC">Đặt cọc</option><option value="THANH_TOAN">Thanh toán</option></select></label><label>Phương thức<select value={method} onChange={e=>setMethod(e.target.value)} className="border p-2 block"><option value="TIEN_MAT">Tiền mặt</option><option value="CHUYEN_KHOAN">Chuyển khoản</option><option value="KHAC">Khác</option></select></label><button disabled={busy||i.total<=i.paid} className="bg-teal-700 text-white rounded px-3 py-2">Ghi nhận khoản thu</button></form></>}
+ <p className="text-sm text-zinc-500">Thay đổi lịch và gia hạn tại màn hình Lịch thuê – trả xe.</p></>}
+ </section>
+}
+

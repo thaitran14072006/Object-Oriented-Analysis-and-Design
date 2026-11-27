@@ -6,7 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 namespace CarRental.Web.Areas.Promotions.Controllers;
 
-[ApiController, Route("api/promotions"), Authorize(Policy = "BillingAdmin")]
+[ServiceFilter(typeof(CarRental.Web.Areas.Billing.Services.BillingAudit))]
+[ApiController, Route("api/promotions"), Authorize(Policy = "Promotions.Access")]
 public class PromotionsController(RentalDbContext db) : ControllerBase
 {
     [HttpGet] public async Task<object> List() => await db.Promotions.AsNoTracking().ToListAsync();
@@ -22,4 +23,3 @@ public class PromotionsController(RentalDbContext db) : ControllerBase
     [HttpPut("{id}/conditions")] public async Task<object> Conditions(string id, PromotionCondition[] rules) { await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable); var p = await db.Promotions.FindAsync(id) ?? throw new BusinessError("Không tìm thấy."); BillingService.Require(p.Status != "DaKetThuc", "Chương trình đã kết thúc."); foreach (var r in rules) { BillingService.Require(r.Kind == "NHOM_KHACH" ? !string.IsNullOrWhiteSpace(r.Group) && r.Season == null && r.Start == null && r.End == null : r.Kind == "MUA_VU" ? !string.IsNullOrWhiteSpace(r.Season) && r.Group == null && r.Start == null && r.End == null : r.Kind == "THOI_DIEM" && r.Group == null && r.Season == null && r.Start >= p.Start && r.End <= p.End && r.End > r.Start, "Điều kiện không hợp lệ."); r.Id = 0; r.PromotionId = id; } db.Conditions.RemoveRange(await db.Conditions.Where(x => x.PromotionId == id).ToListAsync()); db.AddRange(rules); await db.SaveChangesAsync(); await tx.CommitAsync(); return rules; }
     [HttpGet("applied")] public async Task<object> Applied() => await db.Applied.AsNoTracking().ToListAsync();
 }
-
