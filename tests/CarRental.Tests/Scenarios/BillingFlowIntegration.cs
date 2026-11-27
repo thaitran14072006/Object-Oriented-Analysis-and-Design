@@ -9,13 +9,14 @@ using CarRental.Web.Shared.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 public static class BillingFlowIntegration {
- public static async Task Run(){
+ public static async Task Run(bool preview=false){
  var name="BillingFlow_"+Guid.NewGuid().ToString("N");var master="Server=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=True;TrustServerCertificate=True";var cs=new SqlConnectionStringBuilder(master){InitialCatalog=name}.ConnectionString;
  async Task Sql(string connection,string sql){await using var c=new SqlConnection(connection);await c.OpenAsync();foreach(var b in Regex.Split(sql,@"^GO\s*$",RegexOptions.Multiline)){if(string.IsNullOrWhiteSpace(b))continue;await using var cmd=new SqlCommand(b,c);await cmd.ExecuteNonQueryAsync();}}
  void Check(bool ok,string label){if(!ok)throw new Exception(label);Console.WriteLine("PASS "+label);}
  await Sql(master,$"CREATE DATABASE [{name}]");Process? process=null;
  try {
  foreach(var dir in Directory.GetDirectories("database/migrations").Order())foreach(var file in Directory.GetFiles(dir,"*.sql").Order())await Sql(cs,await File.ReadAllTextAsync(file));
+ await Sql(cs,await File.ReadAllTextAsync("database/seeds/nhu-demo.sql"));await Sql(cs,await File.ReadAllTextAsync("database/seeds/nhu-demo.sql"));Console.WriteLine("PASS dữ liệu demo nạp lại không nhân bản");
  var listener=new TcpListener(IPAddress.Loopback,0);listener.Start();var port=((IPEndPoint)listener.LocalEndpoint).Port;listener.Stop();
  var info=new ProcessStartInfo("dotnet"){CreateNoWindow=true,UseShellExecute=false,RedirectStandardOutput=true,RedirectStandardError=true,WorkingDirectory=Path.GetFullPath("src/CarRental.Web")};
  info.ArgumentList.Add(Path.GetFullPath("src/CarRental.Web/bin/Debug/net10.0/CarRental.Web.dll"));info.ArgumentList.Add("--urls");info.ArgumentList.Add($"http://127.0.0.1:{port}");
@@ -40,15 +41,36 @@ public static class BillingFlowIntegration {
   await Sql(cs,"INSERT KhuyenMai(maKhuyenMai,tenChuongTrinh,hinhThucGiam,mucGiam,batDau,ketThuc,trangThai) SELECT 'VIP',N'VIP','SO_TIEN',50,batDau,ketThuc,trangThai FROM KhuyenMai WHERE maKhuyenMai='KM1'; INSERT DieuKienKhuyenMai(maKhuyenMai,loaiDieuKien,maNhom) VALUES ('VIP','NHOM_KHACH','THANTHIET');");
  var csrf=await client.GetFromJsonAsync<JsonElement>("/api/identity/csrf");using(var req=new HttpRequestMessage(HttpMethod.Post,"/api/bookings")){req.Headers.Add("X-CSRF-TOKEN",csrf.GetProperty("token").GetString());req.Content=JsonContent.Create(new{vehicle="XE1",customer="KH1",rateId="R1",start=end.AddDays(1),end=end.AddDays(2),source="TrucTiep",promotionCode="VIP",group="THANTHIET"});using var denied=await client.SendAsync(req);Check(denied.StatusCode==HttpStatusCode.Conflict,"không thể giả mạo nhóm khách để nhận ưu đãi");}
  await using(var db=new RentalDbContext(new DbContextOptionsBuilder<RentalDbContext>().UseSqlServer(cs).Options)){Check(await db.Bookings.CountAsync()==1,"mã không hợp lệ hoàn tác đơn mới cùng giao dịch");}
- var invoice=await Send("/api/billing/invoices",new {booking=bookingId,quote=new {rateId="R1",start,end,fees=Array.Empty<object>(),promotionCode="KM1"}});var invoiceId=invoice.GetProperty("id").GetString();Check(invoice.GetProperty("total").GetDecimal()==180,"lập hóa đơn dùng ưu đãi của đơn");
+  await Send($"/api/billing/bookings/{bookingId}/payments",new {version=0,amount=100,kind="DAT_COC",method="TIEN_MAT",requestId="PREINVOICE",at=DateTime.UtcNow.AddMinutes(-1)});
+ await using(var db=new RentalDbContext(new DbContextOptionsBuilder<RentalDbContext>().UseSqlServer(cs).Options)){Check(await db.Invoices.CountAsync()==0&&(await db.Payments.SingleAsync()).Amount==100,"đặt cọc được ghi nhận trước khi lập hóa đơn");}
+ async Task WriteExpected(HttpMethod method,string path,object? body,HttpStatusCode expected){var token=await client.GetFromJsonAsync<JsonElement>("/api/identity/csrf");using var req=new HttpRequestMessage(method,path);if(body!=null)req.Content=JsonContent.Create(body);req.Headers.Add("X-CSRF-TOKEN",token.GetProperty("token").GetString());using var response=await client.SendAsync(req);Check(response.StatusCode==expected,$"{method} {path.Split('?')[0]} trả {(int)expected}");}
+ await WriteExpected(HttpMethod.Delete,"/api/billing/rates/R1",null,HttpStatusCode.Conflict);
+ await WriteExpected(HttpMethod.Post,$"/api/billing/bookings/{bookingId}/payments",new{version=0,amount=200,kind="DAT_COC",method="TIEN_MAT",requestId="OVERPRE"},HttpStatusCode.Conflict);
+ await WriteExpected(HttpMethod.Post,$"/api/rental-schedule/{bookingId}/adjust",new{version=0,start,end=start.AddDays(1),reason="Giảm lịch sau cọc",fees=(object?)null},HttpStatusCode.Conflict);
+ await Send("/api/billing/surcharges",new{id="F1",name="Phí giao xe",amount=10,calculation="CO_DINH"});
+ var program=await client.GetFromJsonAsync<JsonElement>("/api/promotions/KM1");var revision=program.GetProperty("program").GetProperty("revision").GetString();
+ await Send("/api/promotions/KM1/state",new {action="pause",revision});
+ await WriteExpected(HttpMethod.Post,"/api/promotions/KM1/state",new{action="resume",revision},HttpStatusCode.Conflict);
+ program=await client.GetFromJsonAsync<JsonElement>("/api/promotions/KM1");revision=program.GetProperty("program").GetProperty("revision").GetString();
+ await Send("/api/promotions/KM1/state",new{action="resume",revision});
+ Check((await client.GetFromJsonAsync<JsonElement>("/api/promotions?q=KM1&status=DangApDung")).GetArrayLength()==1,"tìm mã và lọc trạng thái khuyến mãi");
+ var invoice=await Send("/api/billing/invoices",new {booking=bookingId,quote=new {rateId="R1",start,end,fees=new[]{new{id="F1",quantity=1}},promotionCode="KM1"}});var invoiceId=invoice.GetProperty("id").GetString();Check(invoice.GetProperty("total").GetDecimal()==190,"lập hóa đơn dùng ưu đãi của đơn");
+  await WriteExpected(HttpMethod.Delete,"/api/billing/surcharges/F1",null,HttpStatusCode.Conflict);
+ var invoiceDetail=await client.GetFromJsonAsync<JsonElement>($"/api/billing/invoices/{invoiceId}");Check(invoiceDetail.GetProperty("paid").GetDecimal()==100&&invoiceDetail.GetProperty("party").GetProperty("customer").GetString()=="Khách thử","hóa đơn hiển thị khách xe và đặt cọc đã thu trước đó");
  await Send($"/api/billing/invoices/{invoiceId}/payments",new{version=0,amount=50,kind="DAT_COC",method="TIEN_MAT",requestId="FLOWPAY"});
  await Send($"/api/rental-schedule/{bookingId}/adjust",new{version=0,invoiceVersion=1,start,end=end.AddDays(1),reason="Gia hạn kiểm thử"});
- var list=await client.GetFromJsonAsync<JsonElement>("/api/billing/invoices");Check(list[0].GetProperty("total").GetDecimal()==280&&list[0].GetProperty("paid").GetDecimal()==50,"gia hạn đơn có hóa đơn giữ giảm chốt và khoản đã thu");
+ var list=await client.GetFromJsonAsync<JsonElement>("/api/billing/invoices");Check(list[0].GetProperty("total").GetDecimal()==290&&list[0].GetProperty("paid").GetDecimal()==150,"gia hạn đơn có hóa đơn giữ giảm chốt và khoản đã thu");
+   var complaint=await Send("/api/billing/complaints",new{invoiceId,channel="TrucTiep",item="Phí giao xe",content="Khách đề nghị kiểm tra khoản phí"});
+ var complaintId=complaint.GetProperty("id").GetInt64();await WriteExpected(HttpMethod.Post,$"/api/billing/complaints/{complaintId}/resolve",new{resolution=""},HttpStatusCode.Conflict);
+ await Send($"/api/billing/complaints/{complaintId}/resolve",new{resolution="Đã đối chiếu biên nhận và giải thích phí, giữ nguyên hóa đơn"});
+ Check((await client.GetFromJsonAsync<JsonElement>("/api/billing/complaints"))[0].GetProperty("status").GetString()=="DaXuLy","tiếp nhận và giải quyết phản ánh hóa đơn");
+ program=await client.GetFromJsonAsync<JsonElement>("/api/promotions/KM1");revision=program.GetProperty("program").GetProperty("revision").GetString();await Send("/api/promotions/KM1/state",new{action="end",revision});
+ program=await client.GetFromJsonAsync<JsonElement>("/api/promotions/KM1");revision=program.GetProperty("program").GetProperty("revision").GetString();await WriteExpected(HttpMethod.Post,"/api/promotions/KM1/state",new{action="resume",revision},HttpStatusCode.Conflict);
+ await Send("/api/promotions",new{id="FUTURE",name="Chương trình tương lai",kind="SO_TIEN",value=10,start=DateTime.UtcNow.AddDays(1),end=DateTime.UtcNow.AddDays(2),status="DangApDung"});Check((await client.GetFromJsonAsync<JsonElement>("/api/promotions?q=FUTURE&status=SapApDung")).GetArrayLength()==1,"trạng thái chương trình mới được xác định theo thời hạn");
+ if(preview){var done=Path.Combine(AppContext.BaseDirectory,"preview.done");if(File.Exists(done))File.Delete(done);Console.WriteLine($"PREVIEW_URL=http://127.0.0.1:{port}/login");for(int wait=0;wait<720&&!File.Exists(done);wait++)await Task.Delay(250);if(File.Exists(done))File.Delete(done);}
  await Sql(cs,"INSERT QuyenCaNhan VALUES ('ADMIN','Billing.Access',0);");Check((await client.GetAsync("/api/billing/invoices")).StatusCode==HttpStatusCode.Forbidden,"quyền cá nhân mới được áp dụng ngay cho phiên hiện tại");
  await Sql(cs,"DELETE QuyenCaNhan WHERE maTaiKhoan='ADMIN'; UPDATE PhienDangNhap SET thuHoiLuc=SYSUTCDATETIME();");Check((await client.GetAsync("/api/billing/invoices")).StatusCode==HttpStatusCode.Unauthorized,"thu hồi phiên Identity chặn Billing ngay");
  await using(var c=new SqlConnection(cs)){await c.OpenAsync();using var cmd=new SqlCommand("SELECT COUNT(*) FROM NhatKyThaoTac WHERE loaiDoiTuong='Billing' AND hanhDong='Pay'",c);Check(Convert.ToInt32(await cmd.ExecuteScalarAsync())==1,"thanh toán có nhật ký dùng chung");}
  }finally{if(process is {HasExited:false}){process.Kill(true);await process.WaitForExitAsync();}process?.Dispose();SqlConnection.ClearAllPools();await Sql(master,$"ALTER DATABASE [{name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{name}]");}
  }
 }
-
-

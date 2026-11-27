@@ -50,7 +50,7 @@ public sealed class BookingService(RentalDbContext db, IBillingService billing)
         if (b.Status == "HandedOver") Require(input.Start == b.Start && input.End > b.End, "Xe đang thuê chỉ được gia hạn."); await Available(b.Vehicle, input.Start, input.End, id);
         var n = await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE DonThue SET nhanDuKien={input.Start},traDuKien={input.End},phienBan=phienBan+1 WHERE maDon={id} AND phienBan={input.Version}"); Require(n == 1, "Phiên bản cũ.");
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT LichSuDieuChinh(maDon,oldStart,oldEnd,newStart,newEnd,reason,admin,created) VALUES ({id},{b.Start},{b.End},{input.Start},{input.End},{input.Reason},{admin},{DateTime.UtcNow})");
-        var invoice = await db.Invoices.AsNoTracking().SingleOrDefaultAsync(x => x.Booking == id); if (invoice != null) { Require(input.InvoiceVersion.HasValue, "Cần phiên bản hóa đơn."); await billing.Adjust(invoice.Id, new(input.InvoiceVersion!.Value, input.Start, input.End, input.Fees)); }
+        var invoice = await db.Invoices.AsNoTracking().SingleOrDefaultAsync(x => x.Booking == id); if (invoice != null) { Require(input.InvoiceVersion.HasValue, "Cần phiên bản hóa đơn."); await billing.Adjust(invoice.Id, new(input.InvoiceVersion!.Value, input.Start, input.End, input.Fees)); } else { await billing.CheckUnbilled(id); }
         await tx.CommitAsync(); return await Get(id);
     }
 }

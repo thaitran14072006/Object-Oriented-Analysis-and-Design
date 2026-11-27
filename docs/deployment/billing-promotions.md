@@ -46,3 +46,13 @@ dotnet run --project tests/CarRental.Tests -- integration operations billing-flo
 ```
 
 integration kiểm tra thu đồng thời, thu vượt, gửi lại, snapshot và hoàn tiền. operations kiểm tra Fleet/Maintenance/Reports và đối soát dữ liệu. billing-flow tạo cơ sở dữ liệu thử từ đủ 10 nhóm script và chạy máy chủ HTTP riêng: bootstrap, đăng nhập thật, cookie/CSRF, tìm xe theo giá, nhóm ưu đãi thật, hoàn tác mã sai, lập hóa đơn, đặt cọc, gia hạn, thay quyền cá nhân, thu hồi phiên và nhật ký. Tất cả chỉ dùng cơ sở dữ liệu có tên GUID và được xóa trong finally; máy chủ thử được dừng khi hoàn tất.
+
+## Bổ sung nghiệm thu UC4 và UC10
+
+Đặt cọc trước hóa đơn dùng POST /api/billing/bookings/{id}/payments với phiên bản DonThue; sau hóa đơn dùng endpoint invoices/{id}/payments với phiên bản HoaDon. PaymentRequest.at tùy chọn là thời gian thu UTC, không được ở tương lai. Việc giảm lịch trước hóa đơn cũng chặn khi tổng mới thấp hơn đã thu. Hai đường ghi thu được bảo vệ bằng khóa trong giao dịch.
+
+Khuyến mãi có GET /api/promotions?q=&status=, GET /api/promotions/{id} trả chương trình, điều kiện và các lượt áp dụng. POST /{id}/state nhận action pause/resume/end và revision. Sửa chương trình gửi revision trong đối tượng; sửa điều kiện hoặc xóa gửi ?revision=. Revision là dấu kiểm tra nội dung và điều kiện, không thêm cột ngoài RDM. API từ chối bản cũ trong giao dịch khóa chương trình. Trạng thái có hiệu lực được xác định theo thời gian; không thể áp dụng lại chương trình đã hết hạn/kết thúc.
+
+GET /api/billing/invoices/{id} trả chi tiết khách, xe, lịch, snapshot dòng phí và khoản đã thu. Sửa giá/phí trên giao diện nạp lại dữ liệu hiện có. Xóa bị chặn nếu giá đang dùng cho đơn chưa hoàn tất hoặc phí thuộc đơn chưa thu đủ; bản ghi có lịch sử đủ điều kiện sẽ ngừng sử dụng.
+
+Xem bảng đối chiếu 18 UC, kết quả kiểm thử và kịch bản với số tiền cụ thể trong [nhu-acceptance.md](nhu-acceptance.md). Dữ liệu mẫu nằm ở [nhu-demo.sql](../../database/seeds/nhu-demo.sql). Chạy seed sau migrations trên cơ sở dữ liệu phát triển; không tạo tài khoản hoặc ghi đè bản ghi hiện có.

@@ -143,7 +143,7 @@ function Workspace() {
           <div className="min-w-0 truncate text-xs font-mono">
             <span className="text-zinc-500 hidden sm:inline">RentalPro / </span>{section.shortLabel ?? section.label}
           </div>
-          {Content && <span className="rounded bg-[#CCFBF1] px-2 py-0.5 text-xs text-[#0F766E]">Dữ liệu mẫu</span>}
+          {section.key === 'dashboard' && <span className="rounded bg-[#CCFBF1] px-2 py-0.5 text-xs text-[#0F766E]">Dữ liệu mẫu</span>}
         </header>
         <main key={section.key} className={'flex-1 overflow-y-auto ' +
           (appearance?.layout === 'compact' ? 'p-2 sm:p-3' : 'p-3 sm:p-6')}>

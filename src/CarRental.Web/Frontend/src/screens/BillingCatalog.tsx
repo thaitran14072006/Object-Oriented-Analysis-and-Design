@@ -1,0 +1,12 @@
+import {useState} from 'react'
+import {Table} from '../components'
+import {api,EntryForm,useRecords,money,type Field} from './billingApi'
+const local=(s:string)=>{const d=new Date(s.endsWith('Z')?s:s+'Z');return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)}
+export function BillingCatalog({kind}:{kind:'rates'|'surcharges'}){
+ const data=useRecords('billing/'+kind),types=useRecords('fleet/types'),[editing,setEditing]=useState<any>(),[message,setMessage]=useState('')
+ const rate=kind==='rates'
+ const fields:Field[]=rate?[{key:'id',label:'Mã mức giá'},{key:'vehicle',label:'Loại xe',options:types.rows.map(x=>({value:x.id,label:x.name+' ('+x.id+')'}))},{key:'unit',label:'Đơn vị',options:['NGAY','GIO']},{key:'form',label:'Hình thức',options:['NGAN_HAN','DAI_HAN']},{key:'season',label:'Mùa vụ'},{key:'amount',label:'Đơn giá',type:'number'},{key:'start',label:'Bắt đầu',type:'datetime-local'},{key:'end',label:'Kết thúc',type:'datetime-local'}]:[{key:'id',label:'Mã phụ phí'},{key:'name',label:'Tên phụ phí'},{key:'calculation',label:'Cách tính',options:['CO_DINH','THEO_GIO_TRE']},{key:'amount',label:'Mức phí',type:'number'},{key:'description',label:'Mô tả',optional:true}]
+ async function save(v:any){if(editing&&v.id!==editing.id)throw Error('Không được đổi mã.');await api('billing/'+kind+(editing?'/'+editing.id:''),editing?'PUT':'POST',{...editing,...v});setEditing(undefined);await data.reload()}
+ async function remove(r:any){if(!confirm('Xác nhận xóa? Bản ghi đã có lịch sử sẽ được ngừng sử dụng khi đủ điều kiện.'))return;try{await api('billing/'+kind+'/'+r.id,'DELETE');await data.reload();setMessage('Đã xử lý thành công.')}catch(e){setMessage((e as Error).message)}}
+ return <section><p role="alert">{data.error||message}</p><Table headers={['Mã',rate?'Loại xe':'Tên',rate?'Đơn vị':'Cách tính','Giá','Sử dụng','Thao tác']} rows={data.rows.map(r=>[r.id,rate?r.vehicle:r.name,rate?r.unit:r.calculation,money(r.amount),r.active?'Đang dùng':'Đã ngừng',<div className="flex gap-3"><button className="underline" onClick={()=>setEditing(r)}>Chỉnh sửa</button><button className="underline" onClick={()=>void remove(r)}>Xóa</button></div>])}/><EntryForm key={editing?.id||'new'} title={editing?'Chỉnh sửa '+editing.id:rate?'Thêm mức giá':'Thêm phụ phí'} fields={fields} initial={editing?{...editing,...(rate?{start:local(editing.start),end:local(editing.end)}:{})}:rate?{season:'MAC_DINH'}:{}} submit={save}/>{editing&&<button className="border p-2" onClick={()=>setEditing(undefined)}>Hủy chỉnh sửa</button>}</section>
+}
