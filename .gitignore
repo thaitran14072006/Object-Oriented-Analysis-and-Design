@@ -2,3 +2,4 @@
 **/obj/
 **/node_modules/
 src/CarRental.Web/wwwroot/frontend/
+**/App_Data/

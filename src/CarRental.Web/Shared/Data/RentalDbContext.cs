@@ -7,6 +7,7 @@ public class RentalDbContext(DbContextOptions<RentalDbContext> options) : DbCont
     public DbSet<Rate> Rates => Set<Rate>(); public DbSet<Surcharge> Surcharges => Set<Surcharge>(); public DbSet<Invoice> Invoices => Set<Invoice>(); public DbSet<InvoiceFee> InvoiceFees => Set<InvoiceFee>(); public DbSet<Payment> Payments => Set<Payment>(); public DbSet<Complaint> Complaints => Set<Complaint>(); public DbSet<Promotion> Promotions => Set<Promotion>(); public DbSet<PromotionCondition> Conditions => Set<PromotionCondition>(); public DbSet<AppliedPromotion> Applied => Set<AppliedPromotion>(); public DbSet<BookingCost> Bookings => Set<BookingCost>();
     protected override void OnModelCreating(ModelBuilder b)
     {
+        FleetMappings.Configure(b);
         Map<Rate>(b, "MucGiaThue", "Id:maMucGia Vehicle:maLoaiXe Unit:donViTinh Form:hinhThuc Season:muaVu Active:conSuDung Amount:donGia Start:batDau End:ketThuc");
         Map<Surcharge>(b, "PhuPhi", "Id:maPhuPhi Name:tenPhuPhi Calculation:cachTinh Amount:mucPhi Description:moTa Active:conSuDung");
         Map<Invoice>(b, "HoaDon", "Id:maHoaDon Booking:maDon Creator:maNguoiLap Created:lapLuc Rent:tienThue Fees:tongPhuPhi Discount:tienGiam Total:tongTien Version:phienBan");

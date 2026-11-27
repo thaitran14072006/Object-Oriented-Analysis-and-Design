@@ -15,3 +15,6 @@ if (args.Length > 0 && args[0] == "sql") { File.WriteAllText("database/migration
 Check(db.Model.FindEntityType(typeof(CarRental.Web.Areas.Billing.Data.Invoice))!.FindProperty("Version")!.IsConcurrencyToken, "hóa đơn có kiểm soát phiên bản");
 Check(!sql.Contains("CREATE TABLE [DonThue]"), "không tạo lại bảng của Bookings");
 if (args.Contains("integration")) await Integration.Run();
+BookingChecks.Run();
+OperationsChecks.Run();
+if (args.Contains("operations")) await OperationsIntegration.Run();

@@ -11,11 +11,12 @@ public sealed class BookingService(RentalDbContext db, IBillingService billing) 
  IQueryable<Booking> Rows()=>db.Database.SqlQueryRaw<Booking>("SELECT "+Columns+" FROM DonThue");
  public async Task<List<Booking>> List()=>await Rows().OrderBy(x=>x.Start).ToListAsync();
  public async Task<Booking> Get(string id)=>await Rows().SingleOrDefaultAsync(x=>x.Id==id)??throw new BusinessError("Không tìm thấy đơn.");
- // Maintenance must acquire the same transaction-owned lock before writing its schedule.
- async Task Lock(string vehicle){var key="CarRental:Vehicle:"+vehicle.ToUpperInvariant(); await db.Database.ExecuteSqlInterpolatedAsync($"DECLARE @r int; EXEC @r=sp_getapplock @Resource={key},@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000; IF @r<0 THROW 51000,'Vehicle lock failed',1;");}
+ // Đặt xe và bảo trì dùng chung khóa theo xe.
+ Task Lock(string vehicle)=>new VehicleAvailability(db).Lock(vehicle);
  async Task Available(string vehicle,DateTime start,DateTime end,string exclude=""){
   Require(start<end,"Khoảng thuê không hợp lệ.");
   Require(!await Rows().AnyAsync(x=>x.Vehicle==vehicle&&x.Id!=exclude&&(x.Status=="Pending"||x.Status=="Confirmed"||x.Status=="HandedOver")&&x.Start<end&&start<x.End),"Xe đã có lịch thuê trùng.");
+  await new VehicleAvailability(db).Ensure(vehicle,start,end,excludeBooking:exclude);
  }
  public async Task<Booking> Create(BookingInput input,string admin){
   Require(!string.IsNullOrWhiteSpace(input.Vehicle)&&!string.IsNullOrWhiteSpace(input.Customer)&&input.Source is "TrucTiep" or "DienThoai" or "LienKet","Thông tin đơn không hợp lệ.");
@@ -29,9 +30,12 @@ public sealed class BookingService(RentalDbContext db, IBillingService billing) 
   var next=BookingRules.Next(b.Status,input.Action)??throw new BusinessError("Chuyển trạng thái không hợp lệ."); var now=DateTime.UtcNow;
   if(next=="Cancelled" || next=="Rejected") Require(!await db.Payments.AnyAsync(x=>x.Booking==id),"Đơn đã thu tiền, cần xử lý hoàn tiền trước.");
   if(next=="Confirmed"||next=="HandedOver") await Available(b.Vehicle,b.Start,b.End,id);
-  if(next=="HandedOver"){Require(now>=b.Start&&now<b.End,"Chưa đến hoặc đã hết lịch giao xe.");Require(!await Rows().AnyAsync(x=>x.Vehicle==b.Vehicle&&x.Id!=id&&x.Status=="HandedOver"&&x.ActualEnd==null),"Xe chưa được trả thực tế.");}
+  if(next=="HandedOver"){Require(now>=b.Start&&now<b.End,"Chưa đến hoặc đã hết lịch giao xe.");await new VehicleAvailability(db).Ensure(b.Vehicle,now,b.End,excludeBooking:id,handingOver:true);Require(!await Rows().AnyAsync(x=>x.Vehicle==b.Vehicle&&x.Id!=id&&x.Status=="HandedOver"&&x.ActualEnd==null),"Xe chưa được trả thực tế.");}
   DateTime? actualStart=next=="HandedOver"?now:b.ActualStart; DateTime? actualEnd=next=="Returned"?now:b.ActualEnd;
-  var n=await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE DonThue SET trangThai={next},nhanThucTe={actualStart},traThucTe={actualEnd},phienBan=phienBan+1 WHERE maDon={id} AND phienBan={input.Version}"); Require(n==1,"Phiên bản đơn đã thay đổi."); await tx.CommitAsync(); return await Get(id);
+  var n=await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE DonThue SET trangThai={next},nhanThucTe={actualStart},traThucTe={actualEnd},phienBan=phienBan+1 WHERE maDon={id} AND phienBan={input.Version}"); Require(n==1,"Phiên bản đơn đã thay đổi.");
+  if(next=="HandedOver") {var changed=await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE Xe SET tinhTrang='DangChoThue' WHERE maXe={b.Vehicle} AND tinhTrang='SanSang' AND daXoa=0"); Require(changed==1,"Xe chưa sẵn sàng để bàn giao.");}
+  if(next=="Returned") await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE Xe SET tinhTrang='SanSang' WHERE maXe={b.Vehicle} AND tinhTrang='DangChoThue'");
+  await tx.CommitAsync(); return await Get(id);
  }
  public async Task<List<History>> History(string id)=>await db.Database.SqlQuery<History>($"SELECT Id,oldStart,oldEnd,newStart,newEnd,reason,admin,created FROM LichSuDieuChinh WHERE maDon={id}").OrderByDescending(x=>x.Created).ToListAsync();
  public async Task<Booking> Reschedule(string id,ScheduleInput input,string admin){

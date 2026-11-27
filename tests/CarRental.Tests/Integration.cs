@@ -9,7 +9,7 @@ public static class Integration
 {
     public static async Task Run()
     {
-        var name = "NhuTests_" + Guid.NewGuid().ToString("N"); var master = "Server=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=True;TrustServerCertificate=True";
+        var name = "NhuTests_" + Guid.NewGuid().ToString("N"); var master = Environment.GetEnvironmentVariable("CARRENTAL_TEST_MASTER") ?? "Server=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=True;TrustServerCertificate=True";
         async Task Sql(string connection, string sql) { await using var c = new SqlConnection(connection); await c.OpenAsync(); foreach (var batch in Regex.Split(sql, @"^GO\s*$", RegexOptions.Multiline)) { if (!string.IsNullOrWhiteSpace(batch)) { await using var cmd = new SqlCommand(batch, c); await cmd.ExecuteNonQueryAsync(); } } }
         await Sql(master, $"CREATE DATABASE [{name}]"); var cs = master.Replace("Database=master", "Database=" + name);
         RentalDbContext Db() => new(new DbContextOptionsBuilder<RentalDbContext>().UseSqlServer(cs).Options);
