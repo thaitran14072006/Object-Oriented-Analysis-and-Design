@@ -64,3 +64,7 @@ Nếu demo lại sau khi chương trình đã kết thúc, tạo mã mới; khô
 Sau hai commit Docker của Thái, hoàn thiện bước Xem trước → Xác nhận cho UC4.5 và số tiền còn thu trước hóa đơn cho UC4.4. Bộ kiểm thử HTTP đã bổ sung kiểm tra không có hóa đơn sau xem trước, từ chối expectedTotal sai, gửi lại cọc không thu trùng sau khi đơn đã có hóa đơn và giữ đơn giá phí cũ khi danh mục đã ngừng/thay giá. Trong kịch bản demo bước 4, chọn Xem trước, đối chiếu 950.000 tổng / 300.000 đã thu / 650.000 còn thu, sau đó mới Xác nhận lập hóa đơn.
 
 Kiểm thử ứng dụng vẫn chạy trên cơ sở dữ liệu tạm LocalDB. Docker Engine chưa hoạt động lúc kiểm tra; kết quả này không được dùng để tuyên bố đã nghiệm thu bản container.
+
+## Xác minh Docker ngày 28 tháng 11 năm 2026
+
+Đã chạy web và SQL Server container thật, tạo đủ 33 bảng, kiểm tra cọc–hóa đơn–gia hạn–thu đủ tiền–báo cáo và đăng xuất, rồi xác minh dữ liệu sau restart web. Các kiểm tra đều đạt. Xem [nhu-docker-result.md](nhu-docker-result.md) để biết môi trường, số tiền và lệnh chạy lại. Kết quả này cập nhật giới hạn trước đó khi Docker Engine chưa chạy.

@@ -66,3 +66,7 @@ Thái đã bổ sung Docker Compose (eecd8ff) và kiểm tra mật khẩu bootst
 - Gửi lại đúng mã và nội dung khoản cọc qua đường bookings sau khi đã lập hóa đơn trả lại giao dịch cũ. Khoản thu mới qua đường này vẫn bị từ chối khi đã có hóa đơn.
 - Khi tính lại dòng phí cũ, phụ phí đã ngừng vẫn dùng được với đơn giá đã chụp. Đơn mới không được chọn phụ phí đã ngừng.
 - Bộ HTTP kiểm tra xem trước không ghi dữ liệu, chặn tổng không khớp, gửi lại cọc qua giai đoạn lập hóa đơn, và giữ giá chụp của phí đã ngừng. Không yêu cầu cài thêm thư viện giao diện hay đổi cấu hình Docker của Thái.
+
+## Kiểm thử phần Như trên Docker
+
+Bản Docker đã qua luồng HTTP thực tế cho Billing/Promotions ngày 28/11/2026, gồm đối soát tiền, phiên và dữ liệu sau restart. Xem [kết quả Docker](nhu-docker-result.md). Có thể chạy lại trên dữ liệu demo bằng `scripts/Test-NhuDocker.ps1`, nhận BaseUrl loopback và PSCredential của Admin; script tạo dữ liệu thử và giữ lịch sử.
