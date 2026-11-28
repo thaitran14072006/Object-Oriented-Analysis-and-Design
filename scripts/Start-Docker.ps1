@@ -19,6 +19,29 @@ function Invoke-Sql {
     Invoke-Compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -d CarRental @args
 }
 
+function Read-AdminPassword {
+    Write-Host 'Mật khẩu Admin cần 8–128 ký tự và có chữ hoa, chữ thường, chữ số.'
+    while ($true) {
+        $securePassword = Read-Host 'Mật khẩu Admin' -AsSecureString
+        try {
+            $password = [Net.NetworkCredential]::new('', $securePassword).Password
+        } finally {
+            $securePassword.Dispose()
+        }
+
+        $requirements = @()
+        if ($password.Length -lt 8 -or $password.Length -gt 128) { $requirements += 'độ dài 8–128 ký tự' }
+        if ($password -cnotmatch '\p{Lu}') { $requirements += 'chữ hoa' }
+        if ($password -cnotmatch '\p{Ll}') { $requirements += 'chữ thường' }
+        if ($password -cnotmatch '\p{Nd}') { $requirements += 'chữ số' }
+        if ($requirements.Count -eq 0) {
+            return $password
+        }
+
+        Write-Warning "Mật khẩu chưa đạt yêu cầu về $($requirements -join ', '). Vui lòng nhập lại."
+    }
+}
+
 function Initialize-Admin {
     $accounts = Invoke-Sql -h -1 -W -Q 'SET NOCOUNT ON; SELECT COUNT(*) FROM dbo.TaiKhoan;'
     if (($accounts -join '').Trim() -ne '0') {
@@ -31,9 +54,7 @@ function Initialize-Admin {
         BootstrapAdmin__Name = 'Quản trị RentalPro'
         BootstrapAdmin__Email = Read-Host 'Email Admin'
         BootstrapAdmin__Phone = Read-Host 'Số điện thoại Admin'
-        BootstrapAdmin__Password = [Net.NetworkCredential]::new(
-            '', (Read-Host 'Mật khẩu Admin' -AsSecureString)
-        ).Password
+        BootstrapAdmin__Password = Read-AdminPassword
     }
     $original = @{}
     $options = @('run', '--rm', '--no-deps', '-T')
