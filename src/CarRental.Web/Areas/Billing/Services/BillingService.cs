@@ -14,7 +14,17 @@ public class BillingService(RentalDbContext db) : IBillingService
         Require(end > start, "Giờ trả phải sau giờ thuê."); Require(price > 0 && (unit == "GIO" || unit == "NGAY"), "Đơn giá không hợp lệ.");
         return decimal.Round(price * (decimal)Math.Ceiling((end - start).TotalHours / (unit == "NGAY" ? 24 : 1)), 2);
     }
-    async Task<decimal> Fees(FeeInput[] inputs, string? booking = null) { var ids = inputs.Select(x => x.Id).ToArray(); Require(inputs.All(x => x.Quantity >= 0 && decimal.Round(x.Quantity, 2) == x.Quantity), "Số lượng phụ phí không hợp lệ."); Require(ids.Distinct().Count() == ids.Length, "Phụ phí bị lặp."); var fees = await db.Surcharges.Where(x => ids.Contains(x.Id) && x.Active).ToListAsync(); Require(fees.Count == ids.Length, "Phụ phí không còn hiệu lực."); var snapshots = booking == null ? new List<InvoiceFee>() : await db.InvoiceFees.AsNoTracking().Where(x => x.Booking == booking).ToListAsync(); return fees.Sum(x => decimal.Round((snapshots.FirstOrDefault(y => y.SurchargeId == x.Id)?.UnitPrice ?? x.Amount) * inputs.Single(y => y.Id == x.Id).Quantity, 2)); }
+    async Task<decimal> Fees(FeeInput[] inputs, string? booking = null)
+    {
+        var ids = inputs.Select(x => x.Id).ToArray();
+        Require(inputs.All(x => x.Quantity >= 0 && decimal.Round(x.Quantity, 2) == x.Quantity), "Số lượng phụ phí không hợp lệ.");
+        Require(ids.Distinct().Count() == ids.Length, "Phụ phí bị lặp.");
+        var snapshots = booking == null ? new List<InvoiceFee>() : await db.InvoiceFees.AsNoTracking().Where(x => x.Booking == booking).ToListAsync();
+        var used = snapshots.Select(x => x.SurchargeId).ToArray();
+        var fees = await db.Surcharges.Where(x => ids.Contains(x.Id) && (x.Active || used.Contains(x.Id))).ToListAsync();
+        Require(fees.Count == ids.Length, "Phụ phí không còn hiệu lực.");
+        return fees.Sum(x => decimal.Round((snapshots.FirstOrDefault(y => y.SurchargeId == x.Id)?.UnitPrice ?? x.Amount) * inputs.Single(y => y.Id == x.Id).Quantity, 2));
+    }
     async Task<(Cost Cost, Rate Rate, Promotion? Promo)> Calculate(QuoteRequest q, BookingCost? booking = null)
     {
         var rate = await db.Rates.FindAsync(q.RateId) ?? throw new BusinessError("Không tìm thấy mức giá."); Require(booking != null || rate.Active && q.Start >= rate.Start && q.Start < rate.End, "Mức giá hết hiệu lực tại giờ nhận xe.");
@@ -27,6 +37,23 @@ public class BillingService(RentalDbContext db) : IBillingService
         return (new Cost(rent, fees, discount), rate, promo);
     }
     public async Task<Cost> Quote(QuoteRequest q) => (await Calculate(q)).Cost;
+    public async Task<BookingBalance> Balance(string bookingId)
+    {
+        var invoice = await db.Invoices.AsNoTracking().SingleOrDefaultAsync(x => x.Booking == bookingId);
+        var cost = invoice == null ? await BookingTotal(bookingId) : new Cost(invoice.Rent, invoice.Fees, invoice.Discount);
+        var applied = await db.Applied.AsNoTracking().SingleOrDefaultAsync(x => x.Booking == bookingId);
+        var paid = await db.Payments.Where(x => x.Booking == bookingId).SumAsync(x => (decimal?)x.Amount) ?? 0;
+        return new(cost, paid, applied?.PromotionId);
+    }
+    public async Task<BookingBalance> Preview(InvoiceRequest request)
+    {
+        var booking = await db.Bookings.AsNoTracking().SingleOrDefaultAsync(x => x.Id == request.Booking) ?? throw new BusinessError("Không tìm thấy đơn.");
+        Require(!await db.Invoices.AnyAsync(x => x.Booking == request.Booking), "Đơn đã có hóa đơn.");
+        Require(booking.RateId == request.Quote.RateId && booking.Start == request.Quote.Start && booking.End == request.Quote.End, "Thông tin báo giá không khớp đơn thuê.");
+        var calculated = await Calculate(request.Quote with { PromotionCode = null }, booking);
+        var balance = await Balance(request.Booking);
+        return balance with { Cost = calculated.Cost with { Discount = balance.Cost.Discount } };
+    }
     public async Task<object> Apply(string bookingId, QuoteRequest q)
     {
         var owns = db.Database.CurrentTransaction == null; await using var tx = owns ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
@@ -36,22 +63,22 @@ public class BillingService(RentalDbContext db) : IBillingService
     {
         Require(!string.IsNullOrWhiteSpace(r.Booking) && r.Booking.Length <= 20, "Mã đơn không hợp lệ.");
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable); await LockBooking(r.Booking);var booking = await db.Bookings.AsNoTracking().SingleOrDefaultAsync(x => x.Id == r.Booking) ?? throw new BusinessError("Đơn thuê chưa tồn tại."); var c = await Calculate(r.Quote with { PromotionCode = null }, booking); var applied = await db.Applied.SingleOrDefaultAsync(x => x.Booking == r.Booking); var cost = c.Cost with { Discount = applied?.Discount ?? 0 }; Require(string.IsNullOrWhiteSpace(r.Quote.PromotionCode) || applied?.PromotionId == r.Quote.PromotionCode, "Áp dụng mã cho đơn trước khi lập hóa đơn.");
-        var alreadyPaid=await db.Payments.Where(x=>x.Booking==r.Booking).SumAsync(x=>(decimal?)x.Amount)??0;Require(cost.Total>=alreadyPaid,"Tổng hóa đơn thấp hơn khoản đã thu; cần hoàn tiền trước.");Require(!await db.Invoices.AnyAsync(x => x.Booking == r.Booking), "Đơn đã có hóa đơn.");
+        Require(r.ExpectedTotal==null||r.ExpectedTotal==cost.Total,"Chi phí đã thay đổi sau bước xem trước. Hãy xem lại hóa đơn.");var alreadyPaid=await db.Payments.Where(x=>x.Booking==r.Booking).SumAsync(x=>(decimal?)x.Amount)??0;Require(cost.Total>=alreadyPaid,"Tổng hóa đơn thấp hơn khoản đã thu; cần hoàn tiền trước.");Require(!await db.Invoices.AnyAsync(x => x.Booking == r.Booking), "Đơn đã có hóa đơn.");
         Require(booking.RateId == r.Quote.RateId && booking.Start == r.Quote.Start && booking.End == r.Quote.End, "Thông tin báo giá không khớp đơn thuê."); var i = new Invoice { Booking = r.Booking, Creator = admin, Rent = cost.Rent, Fees = cost.Fees, Discount = cost.Discount, Total = cost.Total }; db.Add(i); await db.SaveChangesAsync(); await SaveFees(i.Booking, r.Quote.Fees);
         await db.SaveChangesAsync(); await tx.CommitAsync(); return i;
     }
     async Task SaveFees(string booking, FeeInput[] inputs) { var ids = inputs.Select(x => x.Id).ToArray(); foreach (var f in await db.Surcharges.Where(x => ids.Contains(x.Id)).ToListAsync()) { var qty = inputs.Single(x => x.Id == f.Id).Quantity; var snapshot = await db.InvoiceFees.AsNoTracking().FirstOrDefaultAsync(x => x.Booking == booking && x.SurchargeId == f.Id); var price = snapshot?.UnitPrice ?? f.Amount; db.Add(new InvoiceFee { Booking = booking, SurchargeId = f.Id, Name = snapshot?.Name ?? f.Name, Calculation = snapshot?.Calculation ?? f.Calculation, Quantity = qty, UnitPrice = price, Amount = decimal.Round(price * qty, 2) }); } }
     static DateTime PaymentTime(DateTime? at) {var value=at??DateTime.UtcNow;Require(value<=DateTime.UtcNow.AddMinutes(1),"Ngày thanh toán không được ở tương lai.");return value;}
-    async Task LockBooking(string id) {await db.Bookings.FromSqlInterpolated($"SELECT * FROM DonThue WITH(UPDLOCK,HOLDLOCK) WHERE maDon={id}").AsNoTracking().SingleOrDefaultAsync();}
+    async Task LockBooking(string id) { var booking=await db.Bookings.FromSqlInterpolated($"SELECT * FROM DonThue WITH(UPDLOCK,HOLDLOCK) WHERE maDon={id}").AsNoTracking().SingleOrDefaultAsync();Require(booking!=null,"Không tìm thấy đơn."); }
     async Task<Cost> BookingTotal(string id) {var b=await db.Bookings.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==id)??throw new BusinessError("Không tìm thấy đơn.");var fees=await db.InvoiceFees.Where(x=>x.Booking==id).SumAsync(x=>(decimal?)x.Amount)??0;var discount=await db.Applied.Where(x=>x.Booking==id).Select(x=>(decimal?)x.Discount).SingleOrDefaultAsync()??0;return new(Rental(b.UnitPrice,b.Unit,b.Start,b.End),fees,discount);}
     public async Task CheckUnbilled(string id){var cost=await BookingTotal(id);var paid=await db.Payments.Where(x=>x.Booking==id).SumAsync(x=>(decimal?)x.Amount)??0;if(paid>cost.Total)throw new BusinessError("Cần hoàn tiền trước khi chốt điều chỉnh.",paid-cost.Total);}
     public async Task<object> PayBooking(string id,PaymentRequest r,string admin){
       var owns=db.Database.CurrentTransaction==null;await using var tx=owns?await db.Database.BeginTransactionAsync(IsolationLevel.Serializable):null;
-      await LockBooking(id);var invoice=await db.Invoices.AsNoTracking().SingleOrDefaultAsync(x=>x.Booking==id);Require(invoice==null,"Đơn đã có hóa đơn. Hãy ghi thu theo hóa đơn.");
+      await LockBooking(id);var invoice=await db.Invoices.AsNoTracking().SingleOrDefaultAsync(x=>x.Booking==id);
       var version=await db.Database.SqlQuery<long>($"SELECT phienBan AS [Value] FROM DonThue WHERE maDon={id}").SingleAsync();
       Require(r.Amount>0&&decimal.Round(r.Amount,2)==r.Amount&&r.Kind is "DAT_COC" or "THANH_TOAN"&&r.Method is "TIEN_MAT" or "CHUYEN_KHOAN" or "KHAC"&&!string.IsNullOrWhiteSpace(r.RequestId)&&r.RequestId.Length<=30,"Thông tin khoản thu không hợp lệ.");
       var prior=await db.Payments.SingleOrDefaultAsync(x=>x.Id==r.RequestId);if(prior!=null){Require(prior.Booking==id&&prior.Amount==r.Amount&&prior.Kind==r.Kind&&prior.Method==r.Method,"Mã giao dịch đã sử dụng.");return prior;}
-      Require(version==r.Version,"Đơn đã thay đổi. Hãy tải lại.");var cost=await BookingTotal(id);var paid=await db.Payments.Where(x=>x.Booking==id).SumAsync(x=>(decimal?)x.Amount)??0;Require(paid+r.Amount<=cost.Total,"Số thu vượt số còn phải thu.");
+      Require(invoice==null,"Đơn đã có hóa đơn. Hãy ghi thu theo hóa đơn.");Require(version==r.Version,"Đơn đã thay đổi. Hãy tải lại.");var cost=await BookingTotal(id);var paid=await db.Payments.Where(x=>x.Booking==id).SumAsync(x=>(decimal?)x.Amount)??0;Require(paid+r.Amount<=cost.Total,"Số thu vượt số còn phải thu.");
       var p=new Payment{Id=r.RequestId,Booking=id,Recorder=admin,Amount=r.Amount,Kind=r.Kind,Method=r.Method,Reference=r.Reference,Created=PaymentTime(r.At)};db.Add(p);await db.SaveChangesAsync();if(tx!=null)await tx.CommitAsync();return p;
     }
     public async Task<object> Pay(string id, PaymentRequest r, string admin)

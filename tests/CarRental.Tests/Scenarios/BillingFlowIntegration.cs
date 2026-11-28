@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 public static class BillingFlowIntegration {
  public static async Task Run(bool preview=false){
- var name="BillingFlow_"+Guid.NewGuid().ToString("N");var master="Server=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=True;TrustServerCertificate=True";var cs=new SqlConnectionStringBuilder(master){InitialCatalog=name}.ConnectionString;
+ var name="BillingFlow_"+Guid.NewGuid().ToString("N");var master=Environment.GetEnvironmentVariable("CARRENTAL_TEST_MASTER")??"Server=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=True;TrustServerCertificate=True";var cs=new SqlConnectionStringBuilder(master){InitialCatalog=name}.ConnectionString;
  async Task Sql(string connection,string sql){await using var c=new SqlConnection(connection);await c.OpenAsync();foreach(var b in Regex.Split(sql,@"^GO\s*$",RegexOptions.Multiline)){if(string.IsNullOrWhiteSpace(b))continue;await using var cmd=new SqlCommand(b,c);await cmd.ExecuteNonQueryAsync();}}
  void Check(bool ok,string label){if(!ok)throw new Exception(label);Console.WriteLine("PASS "+label);}
  await Sql(master,$"CREATE DATABASE [{name}]");Process? process=null;
@@ -54,13 +54,22 @@ public static class BillingFlowIntegration {
  program=await client.GetFromJsonAsync<JsonElement>("/api/promotions/KM1");revision=program.GetProperty("program").GetProperty("revision").GetString();
  await Send("/api/promotions/KM1/state",new{action="resume",revision});
  Check((await client.GetFromJsonAsync<JsonElement>("/api/promotions?q=KM1&status=DangApDung")).GetArrayLength()==1,"tìm mã và lọc trạng thái khuyến mãi");
+  var beforeInvoice=await Send("/api/billing/invoices/preview",new{booking=bookingId,quote=new{rateId="R1",start,end,fees=new[]{new{id="F1",quantity=1}},promotionCode="KM1"}});
+ Check(beforeInvoice.GetProperty("cost").GetProperty("total").GetDecimal()==190&&beforeInvoice.GetProperty("paid").GetDecimal()==100&&beforeInvoice.GetProperty("remaining").GetDecimal()==90,"xem trước hóa đơn lấy giá chụp, phí, giảm và đặt cọc từ máy chủ");
+ await using(var db=new RentalDbContext(new DbContextOptionsBuilder<RentalDbContext>().UseSqlServer(cs).Options)){Check(await db.Invoices.CountAsync()==0,"xem trước không lập hóa đơn hoặc ghi khoản thu");}
+ await WriteExpected(HttpMethod.Post,"/api/billing/invoices",new{booking=bookingId,expectedTotal=999,quote=new{rateId="R1",start,end,fees=new[]{new{id="F1",quantity=1}},promotionCode="KM1"}},HttpStatusCode.Conflict);
  var invoice=await Send("/api/billing/invoices",new {booking=bookingId,quote=new {rateId="R1",start,end,fees=new[]{new{id="F1",quantity=1}},promotionCode="KM1"}});var invoiceId=invoice.GetProperty("id").GetString();Check(invoice.GetProperty("total").GetDecimal()==190,"lập hóa đơn dùng ưu đãi của đơn");
-  await WriteExpected(HttpMethod.Delete,"/api/billing/surcharges/F1",null,HttpStatusCode.Conflict);
+   await Send($"/api/billing/bookings/{bookingId}/payments",new{version=0,amount=100,kind="DAT_COC",method="TIEN_MAT",requestId="PREINVOICE"});
+ await using(var db=new RentalDbContext(new DbContextOptionsBuilder<RentalDbContext>().UseSqlServer(cs).Options)){Check(await db.Payments.CountAsync()==1,"gửi lại cọc sau khi có hóa đơn trả giao dịch cũ, không thu trùng");}
+ await WriteExpected(HttpMethod.Delete,"/api/billing/surcharges/F1",null,HttpStatusCode.Conflict);
  var invoiceDetail=await client.GetFromJsonAsync<JsonElement>($"/api/billing/invoices/{invoiceId}");Check(invoiceDetail.GetProperty("paid").GetDecimal()==100&&invoiceDetail.GetProperty("party").GetProperty("customer").GetString()=="Khách thử","hóa đơn hiển thị khách xe và đặt cọc đã thu trước đó");
  await Send($"/api/billing/invoices/{invoiceId}/payments",new{version=0,amount=50,kind="DAT_COC",method="TIEN_MAT",requestId="FLOWPAY"});
  await Send($"/api/rental-schedule/{bookingId}/adjust",new{version=0,invoiceVersion=1,start,end=end.AddDays(1),reason="Gia hạn kiểm thử"});
  var list=await client.GetFromJsonAsync<JsonElement>("/api/billing/invoices");Check(list[0].GetProperty("total").GetDecimal()==290&&list[0].GetProperty("paid").GetDecimal()==150,"gia hạn đơn có hóa đơn giữ giảm chốt và khoản đã thu");
-   var complaint=await Send("/api/billing/complaints",new{invoiceId,channel="TrucTiep",item="Phí giao xe",content="Khách đề nghị kiểm tra khoản phí"});
+    await Sql(cs,"UPDATE PhuPhi SET conSuDung=0,mucPhi=999 WHERE maPhuPhi='F1';");
+ await Send($"/api/billing/invoices/{invoiceId}/adjust",new{version=2,start,end=end.AddDays(1),fees=new[]{new{id="F1",quantity=2}}});
+ var adjusted=await client.GetFromJsonAsync<JsonElement>($"/api/billing/invoices/{invoiceId}");Check(adjusted.GetProperty("invoice").GetProperty("fees").GetDecimal()==20,"điều chỉnh phí cũ đã ngừng vẫn giữ đơn giá chụp, không lấy giá danh mục mới");
+ var complaint=await Send("/api/billing/complaints",new{invoiceId,channel="TrucTiep",item="Phí giao xe",content="Khách đề nghị kiểm tra khoản phí"});
  var complaintId=complaint.GetProperty("id").GetInt64();await WriteExpected(HttpMethod.Post,$"/api/billing/complaints/{complaintId}/resolve",new{resolution=""},HttpStatusCode.Conflict);
  await Send($"/api/billing/complaints/{complaintId}/resolve",new{resolution="Đã đối chiếu biên nhận và giải thích phí, giữ nguyên hóa đơn"});
  Check((await client.GetFromJsonAsync<JsonElement>("/api/billing/complaints"))[0].GetProperty("status").GetString()=="DaXuLy","tiếp nhận và giải quyết phản ánh hóa đơn");

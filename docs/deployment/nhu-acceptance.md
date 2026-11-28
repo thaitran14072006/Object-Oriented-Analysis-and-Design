@@ -58,3 +58,9 @@ Trên cơ sở dữ liệu demo đã chạy đủ migrations, chạy `database/s
 8. Mở NHU10, tạm ngừng, áp dụng lại rồi kết thúc. Chương trình kết thúc không nhận áp dụng lại; số lượt và giảm đã chốt trên đơn vẫn còn.
 
 Nếu demo lại sau khi chương trình đã kết thúc, tạo mã mới; không tái sử dụng mã đã kết thúc. Nếu xe đã có đơn từ lần trước, dùng khung ngày khác hoặc một xe demo mới. Không xóa lịch sử để làm lại demo.
+
+## Bổ sung xác minh ngày 28 tháng 11 năm 2026
+
+Sau hai commit Docker của Thái, hoàn thiện bước Xem trước → Xác nhận cho UC4.5 và số tiền còn thu trước hóa đơn cho UC4.4. Bộ kiểm thử HTTP đã bổ sung kiểm tra không có hóa đơn sau xem trước, từ chối expectedTotal sai, gửi lại cọc không thu trùng sau khi đơn đã có hóa đơn và giữ đơn giá phí cũ khi danh mục đã ngừng/thay giá. Trong kịch bản demo bước 4, chọn Xem trước, đối chiếu 950.000 tổng / 300.000 đã thu / 650.000 còn thu, sau đó mới Xác nhận lập hóa đơn.
+
+Kiểm thử ứng dụng vẫn chạy trên cơ sở dữ liệu tạm LocalDB. Docker Engine chưa hoạt động lúc kiểm tra; kết quả này không được dùng để tuyên bố đã nghiệm thu bản container.

@@ -56,3 +56,13 @@ Khuyến mãi có GET /api/promotions?q=&status=, GET /api/promotions/{id} trả
 GET /api/billing/invoices/{id} trả chi tiết khách, xe, lịch, snapshot dòng phí và khoản đã thu. Sửa giá/phí trên giao diện nạp lại dữ liệu hiện có. Xóa bị chặn nếu giá đang dùng cho đơn chưa hoàn tất hoặc phí thuộc đơn chưa thu đủ; bản ghi có lịch sử đủ điều kiện sẽ ngừng sử dụng.
 
 Xem bảng đối chiếu 18 UC, kết quả kiểm thử và kịch bản với số tiền cụ thể trong [nhu-acceptance.md](nhu-acceptance.md). Dữ liệu mẫu nằm ở [nhu-demo.sql](../../database/seeds/nhu-demo.sql). Chạy seed sau migrations trên cơ sở dữ liệu phát triển; không tạo tài khoản hoặc ghi đè bản ghi hiện có.
+
+## Cập nhật sau cấu hình Docker ngày 28 tháng 11 năm 2026
+
+Thái đã bổ sung Docker Compose (eecd8ff) và kiểm tra mật khẩu bootstrap (b3275e7). Đây là thay đổi triển khai; chín bảng Billing/Promotions giữ nguyên, không cần migration bổ sung cho các thay đổi dưới đây. Xem [docker.md](docker.md) để chạy container và nạp dữ liệu demo. Docker Engine không chạy trên máy lúc kiểm tra này nên chưa xác minh container; kiểm thử nghiệp vụ chạy trên LocalDB.
+
+- UC4.4: GET /api/billing/bookings/{id}/balance cung cấp tổng chi phí đã ghi, ưu đãi chốt, đã thu và còn thu trước hóa đơn. Phụ phí mới đang chọn trên màn hình chỉ được tính vào bước xem trước; chưa được ghi vào đơn cho đến khi xác nhận hóa đơn.
+- UC4.5: POST /api/billing/invoices/preview nhận InvoiceRequest, trả tiền thuê/phí/giảm/đã thu/còn thu dựa trên snapshot của đơn; không ghi hóa đơn hoặc thanh toán. Giao diện yêu cầu Xem trước rồi Xác nhận lập hóa đơn. Khi xác nhận gửi expectedTotal; máy chủ tính lại trong giao dịch và từ chối nếu tổng đã đổi. Đây là kiểm tra lại tại lúc ghi, không phải khóa giữ giá từ lúc xem trước.
+- Gửi lại đúng mã và nội dung khoản cọc qua đường bookings sau khi đã lập hóa đơn trả lại giao dịch cũ. Khoản thu mới qua đường này vẫn bị từ chối khi đã có hóa đơn.
+- Khi tính lại dòng phí cũ, phụ phí đã ngừng vẫn dùng được với đơn giá đã chụp. Đơn mới không được chọn phụ phí đã ngừng.
+- Bộ HTTP kiểm tra xem trước không ghi dữ liệu, chặn tổng không khớp, gửi lại cọc qua giai đoạn lập hóa đơn, và giữ giá chụp của phí đã ngừng. Không yêu cầu cài thêm thư viện giao diện hay đổi cấu hình Docker của Thái.
