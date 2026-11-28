@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 
 export async function request<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string,string> = { 'Content-Type': 'application/json' }; if(method!=='GET'){const r=await fetch('/api/identity/csrf',{signal,cache:'no-store'});if(!r.ok)throw Error('Không lấy được mã xác thực yêu cầu.');headers['X-CSRF-TOKEN']=(await r.json()).token}
@@ -50,17 +50,19 @@ export function DataTable({ headers, rows }: { headers: string[]; rows: ReactNod
   </table></div>
 }
 
-export type Field = { key: string; label: string; type?: string; optional?: boolean; min?: number; max?: number; maxLength?: number; options?: { value: string; label: string }[]; readOnly?: boolean }
+export type Field = { key: string; label: string; type?: string; optional?: boolean; min?: number; max?: number; maxLength?: number; options?: { value: string; label: string }[]; suggestions?: string[]; placeholder?: string; readOnly?: boolean }
 export function RecordForm({ title, fields, values = {}, save, cancel }: {
   title: string; fields: Field[]; values?: Record<string, unknown>; save: (values: Record<string, unknown>) => Promise<void>; cancel?: () => void
 }) {
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
+  const formId = useId()
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = event.currentTarget, data: Record<string, unknown> = Object.fromEntries(new FormData(form))
     for (const field of fields) {
       if (field.type === 'number') data[field.key] = Number(data[field.key])
       if (field.type === 'datetime-local' && data[field.key]) data[field.key] = new Date(String(data[field.key])).toISOString()
       if (field.type === 'checkbox') data[field.key] = data[field.key] === 'on'
+      if (field.type === 'boolean') data[field.key] = data[field.key] === 'true'
     }
     setBusy(true); setError('')
     try { await save(data); form.reset() } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
@@ -69,12 +71,14 @@ export function RecordForm({ title, fields, values = {}, save, cancel }: {
     <h2 className="mb-4 font-semibold">{title}</h2><fieldset disabled={busy} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {fields.map(field => <label className="text-sm" key={field.key}>{field.label}
         {field.options ? <select name={field.key} required={!field.optional} className={inputClass} defaultValue={String(values[field.key] ?? '')}>
-          <option value="">Chọn…</option>{field.options.map(o => <option value={o.value} key={o.value}>{o.label}</option>)}</select>
-          : field.type === 'textarea' ? <textarea name={field.key} required={!field.optional} maxLength={field.maxLength} rows={3} className={inputClass} defaultValue={String(values[field.key] ?? '')} />
+          <option value="">{field.optional ? 'Chưa chọn' : 'Chọn…'}</option>{field.options.map(o => <option value={o.value} key={o.value}>{o.label}</option>)}</select>
+          : field.type === 'textarea' ? <textarea name={field.key} placeholder={field.placeholder} required={!field.optional} maxLength={field.maxLength} rows={3} className={inputClass} defaultValue={String(values[field.key] ?? '')} />
           : <input name={field.key} type={field.type || 'text'} required={!field.optional && field.type !== 'checkbox'} readOnly={field.readOnly}
+            list={field.suggestions ? `${formId}-${field.key}` : undefined} placeholder={field.placeholder}
             min={field.min} max={field.max} maxLength={field.maxLength} step={field.type === 'number' ? 'any' : undefined}
             className={field.type === 'checkbox' ? 'ml-3' : inputClass} defaultChecked={field.type === 'checkbox' ? Boolean(values[field.key]) : undefined}
             defaultValue={field.type === 'checkbox' ? undefined : String(values[field.key] ?? '')} />}
+        {field.suggestions && <datalist id={`${formId}-${field.key}`}>{[...new Set(field.suggestions)].map(value => <option key={value} value={value} />)}</datalist>}
       </label>)}
     </fieldset><p role="alert" className="mt-3 text-sm text-red-700">{error}</p>
     <div className="mt-3 flex gap-3"><button className={button} disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu'}</button>

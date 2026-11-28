@@ -24,11 +24,13 @@ export function Vehicles() {
     })
   }
   const fields: Field[] = [
-    { key: 'id', label: 'Mã xe', maxLength: 20, readOnly: !creating }, { key: 'typeId', label: 'Loại xe', options: typeOptions },
-    { key: 'name', label: 'Tên xe', maxLength: 100 }, { key: 'brand', label: 'Hãng xe', maxLength: 80 },
-    { key: 'plate', label: 'Biển số', maxLength: 20 }, { key: 'color', label: 'Màu sắc', maxLength: 40 },
-    { key: 'year', label: `Năm sản xuất (2000–${new Date().getFullYear()})`, type: 'number', min: 2000, max: new Date().getFullYear() },
-    { key: 'seats', label: 'Số chỗ (4–16)', type: 'number', min: 4, max: 16 },
+    { key: 'id', label: 'Mã xe', maxLength: 20, readOnly: !creating, placeholder: 'VD: XE001' }, { key: 'typeId', label: 'Loại xe', options: typeOptions },
+    { key: 'name', label: 'Tên xe', maxLength: 100, placeholder: 'VD: Toyota Vios 1.5G' },
+    { key: 'brand', label: 'Hãng xe (chọn gợi ý hoặc nhập khác)', maxLength: 80, suggestions: ['Toyota', 'Honda', 'Hyundai', 'Kia', 'Mazda', 'Ford', 'Mitsubishi', 'Suzuki', 'VinFast', 'Nissan', 'Mercedes-Benz', 'BMW'], placeholder: 'VD: Toyota' },
+    { key: 'plate', label: 'Biển số', maxLength: 20, placeholder: 'VD: 51A-12345' },
+    { key: 'color', label: 'Màu sắc (chọn gợi ý hoặc nhập khác)', maxLength: 40, suggestions: ['Trắng', 'Đen', 'Bạc', 'Xám', 'Đỏ', 'Xanh dương', 'Xanh lá', 'Nâu', 'Vàng', 'Cam'], placeholder: 'VD: Trắng' },
+    { key: 'year', label: 'Năm sản xuất', type: 'number', options: Array.from({ length: new Date().getFullYear() - 1999 }, (_, i) => { const value = String(new Date().getFullYear() - i); return { value, label: value } }) },
+    { key: 'seats', label: 'Số chỗ', type: 'number', options: Array.from({ length: 13 }, (_, i) => ({ value: String(i + 4), label: `${i + 4} chỗ` })) },
     { key: 'transmission', label: 'Hộp số', options: ['Số sàn', 'Tự động'].map(value => ({ value, label: value })) },
     { key: 'parking', label: 'Vị trí đỗ', optional: !oldParking, options: parkingOptions },
     { key: 'status', label: 'Tình trạng', options: ['SanSang', 'NgungKhaiThac'].map(s => ({ value: s, label: statusNames[s] })) },

@@ -31,7 +31,7 @@ export function Maintenance() {
     {creating && <RecordForm title="Lập lịch bảo trì" fields={[
       { key: 'vehicleId', label: 'Xe', options }, { key: 'kind', label: 'Loại bảo trì', options: ['DinhKy', 'SuaChua', 'NangCap'].map(s => ({ value: s, label: statusNames[s] })) },
       { key: 'start', label: 'Bắt đầu dự kiến', type: 'datetime-local' }, { key: 'end', label: 'Kết thúc dự kiến', type: 'datetime-local' },
-      { key: 'content', label: 'Nội dung', type: 'textarea', maxLength: 1000 },
+      { key: 'content', label: 'Nội dung', type: 'textarea', maxLength: 1000, placeholder: 'VD: Bảo dưỡng định kỳ, thay dầu và kiểm tra phanh' },
     ]} save={async data => { await request('maintenance', 'POST', data); records.reload(); setCreating(false) }} />}
     <DataTable headers={['Mã phiếu', 'Xe', 'Nội dung', 'Bắt đầu', 'Kết thúc dự kiến', 'Chi phí', 'Trạng thái', '']} rows={rows.map(row => [
       row.id, `${row.vehicleName} — ${row.plate}`, row.content, dateTime(row.start), dateTime(row.end), money(row.cost), statusNames[row.status],
@@ -65,9 +65,9 @@ function MaintenanceDetail({ id, close, changed }: { id: string; close: () => vo
       <h3 className="mb-2 mt-5 font-semibold">Chi phí — {money(data.costs.reduce((sum, c) => sum + c.amount, 0))}</h3><DataTable headers={['Ngày', 'Hạng mục', 'Đơn vị thực hiện', 'Số tiền']} rows={data.costs.map(c => [c.date, c.item, c.provider, money(c.amount)])} />
       <h3 className="mb-2 mt-5 font-semibold">Kiểm tra an toàn</h3><DataTable headers={['Thời gian', 'Người kiểm tra', 'Kết quả', 'Ghi chú']} rows={data.safety.map(s => [dateTime(s.created), s.inspector, s.passed ? 'Đạt' : 'Không đạt', s.note || '—'])} />
       {record.status === 'DangThucHien' && <>
-        <RecordForm title="Cập nhật tiến độ" fields={[{ key: 'content', label: 'Nội dung', type: 'textarea', maxLength: 1000 }]} save={body => update('progress', body)} />
-        <RecordForm title="Ghi chi phí" fields={[{ key: 'item', label: 'Hạng mục', maxLength: 255 }, { key: 'provider', label: 'Đơn vị thực hiện', maxLength: 255 }, { key: 'amount', label: 'Số tiền', type: 'number', min: 0 }, { key: 'date', label: 'Ngày ghi nhận', type: 'date' }]} save={body => update('cost', body)} />
-        <RecordForm title="Ghi kết quả an toàn" fields={[{ key: 'inspector', label: 'Người kiểm tra', maxLength: 100 }, { key: 'passed', label: 'Kiểm tra đạt', type: 'checkbox' }, { key: 'note', label: 'Ghi chú', type: 'textarea', optional: true, maxLength: 1000 }]} save={body => update('safety', body)} />
+        <RecordForm title="Cập nhật tiến độ" fields={[{ key: 'content', label: 'Nội dung', type: 'textarea', maxLength: 1000, placeholder: 'VD: Đã thay dầu, đang kiểm tra phanh' }]} save={body => update('progress', body)} />
+        <RecordForm title="Ghi chi phí" fields={[{ key: 'item', label: 'Hạng mục (chọn gợi ý hoặc nhập khác)', maxLength: 255, suggestions: ['Thay dầu động cơ', 'Thay lốp', 'Bảo dưỡng phanh', 'Thay ắc quy', 'Sửa điều hòa', ...data.costs.map(c => c.item)], placeholder: 'VD: Thay dầu động cơ' }, { key: 'provider', label: 'Đơn vị thực hiện', maxLength: 255, suggestions: data.costs.map(c => c.provider), placeholder: 'Tên garage hoặc đơn vị bảo dưỡng' }, { key: 'amount', label: 'Số tiền (đồng)', type: 'number', min: 0 }, { key: 'date', label: 'Ngày ghi nhận', type: 'date' }]} save={body => update('cost', body)} />
+        <RecordForm title="Ghi kết quả an toàn" fields={[{ key: 'inspector', label: 'Người kiểm tra', maxLength: 100, suggestions: data.safety.map(s => s.inspector), placeholder: 'Họ tên người trực tiếp kiểm tra' }, { key: 'passed', label: 'Kết quả kiểm tra', type: 'boolean', options: [{ value: 'true', label: 'Đạt' }, { value: 'false', label: 'Không đạt' }] }, { key: 'note', label: 'Ghi chú', type: 'textarea', optional: true, maxLength: 1000, placeholder: 'Kết quả kiểm tra hoặc vấn đề cần khắc phục' }]} save={body => update('safety', body)} />
       </>}
     </>}
   </section>
