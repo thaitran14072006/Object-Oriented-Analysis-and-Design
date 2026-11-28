@@ -10,7 +10,8 @@ using CarRental.Web.Shared.Contracts;
 using CarRental.Web.Shared.Data;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
-var builder = WebApplication.CreateBuilder(args);
+var bootstrapOnly = args is ["--bootstrap-admin"];
+var builder = WebApplication.CreateBuilder(bootstrapOnly ? Array.Empty<string>() : args);
 builder.Services.AddControllersWithViews(o => o.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
 builder.Services.AddAntiforgery(o => o.HeaderName = "X-CSRF-TOKEN");
 builder.Services.AddDataProtection();
@@ -87,10 +88,16 @@ app.Use(async (context, next) =>
     }
 });
 app.UseStaticFiles(); app.UseAuthentication(); app.UseAuthorization(); app.MapControllers();
-if (!string.IsNullOrWhiteSpace(builder.Configuration["BootstrapAdmin:Password"]))
+var hasBootstrapPassword = !string.IsNullOrWhiteSpace(builder.Configuration["BootstrapAdmin:Password"]);
+if (bootstrapOnly && !hasBootstrapPassword)
+    throw new InvalidOperationException("Thiết lập BootstrapAdmin:Password trước khi khởi tạo tài khoản.");
+
+if (hasBootstrapPassword)
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<AuthService>().BootstrapAsync(CancellationToken.None);
 }
-app.Run();
+if (!bootstrapOnly)
+    app.Run();
+
 public partial class Program { }

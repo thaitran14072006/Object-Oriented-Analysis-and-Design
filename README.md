@@ -4,6 +4,18 @@
 
 Ứng dụng quản trị nội bộ cho doanh nghiệp cho thuê xe, dựa trên báo cáo OOAD S6 Nhóm 02 lần 04. Phương án triển khai sử dụng ASP.NET Core MVC trên .NET 10, EF Core và SQL Server.
 
+## Chạy bằng Docker
+
+Mở Docker Desktop ở chế độ Linux containers. Từ thư mục gốc, chạy bằng PowerShell 7.2 trở lên.
+
+```powershell
+.\scripts\Start-Docker.ps1 -InitializeAdmin -DemoData
+```
+
+Script tạo mật khẩu SQL trong `.env`, khởi tạo các migration theo thứ tự 01–10 và chạy RentalPro tại [http://localhost:5080/login](http://localhost:5080/login). Nếu chưa có tài khoản, nhập email, số điện thoại và mật khẩu ở lời nhắc để tạo `ADMIN01`. Mật khẩu Admin cần ít nhất 8 ký tự, gồm chữ hoa, chữ thường và số. Bỏ `-DemoData` để bắt đầu với database dành cho nhập dữ liệu mới.
+
+Những lần chạy tiếp theo dùng `.\scripts\Start-Docker.ps1`. Xem [hướng dẫn Docker](docs/deployment/docker.md) để biết cách xem log, đổi cổng và giữ dữ liệu sau khi dừng container.
+
 ## Chạy giao diện RentalPro
 
 Dùng .NET SDK 10 và Node.js 22.12 trở lên. Từ thư mục gốc của repository, chạy:
@@ -16,7 +28,7 @@ dotnet run --project src/CarRental.Web --urls http://localhost:5080
 
 Mở [http://localhost:5080](http://localhost:5080). Khi sửa giao diện, có thể chạy `npm --prefix src/CarRental.Web/Frontend run dev` và mở địa chỉ Vite hiển thị trong terminal. Chạy lại `npm run build` trong thư mục `Frontend` để cập nhật giao diện do ASP.NET Core phục vụ hoặc trước khi chạy `dotnet publish`.
 
-Giao diện React được chuyển từ Figma Make. Mỗi màn hình nằm trong `src/CarRental.Web/Frontend/src/screens/`. Điều hướng, xem chi tiết, tìm kiếm và lọc hợp đồng sử dụng dữ liệu mẫu. Đăng nhập, ghi dữ liệu và các thao tác cần cơ sở dữ liệu sẽ được nối với nghiệp vụ theo từng mô-đun.
+Giao diện React được chuyển từ Figma Make. Mỗi màn hình nằm trong `src/CarRental.Web/Frontend/src/screens/`. Màn hình Tổng quan hiển thị số liệu mẫu. Đăng nhập và các mô-đun nghiệp vụ dùng API kết nối SQL Server.
 
 ### Cấu trúc repository
 
@@ -54,4 +66,4 @@ Script SQL là nguồn quản lý cấu trúc cơ sở dữ liệu. Ánh xạ EF
 
 ### Phần giá thuê, thanh toán và khuyến mãi
 
-Phần của Phạm Quỳnh Như có API SQL Server, giao diện ghi dữ liệu và kiểm thử giao dịch thực tế. Xem [hướng dẫn tích hợp và chạy kiểm thử](docs/deployment/billing-promotions.md). Cấu hình `ConnectionStrings__CarRental` và chạy các script SQL theo thứ tự mô-đun. Các API cần cookie Admin từ phần Identity; dữ liệu khách, loại xe và đơn thuê do mô-đun tương ứng cung cấp. Những màn hình còn lại vẫn sử dụng dữ liệu mẫu như mô tả ở trên.
+Phần của Phạm Quỳnh Như có API SQL Server, giao diện ghi dữ liệu và kiểm thử giao dịch thực tế. Xem [hướng dẫn tích hợp và chạy kiểm thử](docs/deployment/billing-promotions.md). Cấu hình `ConnectionStrings__CarRental` và chạy các script SQL theo thứ tự mô-đun. Các API cần cookie Admin từ phần Identity; dữ liệu khách, loại xe và đơn thuê do mô-đun tương ứng cung cấp. Màn hình Tổng quan dùng số liệu mẫu. Mục Báo cáo & thống kê truy vấn dữ liệu nghiệp vụ.
