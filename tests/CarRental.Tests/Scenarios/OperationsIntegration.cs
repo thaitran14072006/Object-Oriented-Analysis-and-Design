@@ -46,15 +46,22 @@ public static class OperationsIntegration
             foreach (var module in new[] { "02_fleet", "04_pricing", "05_bookings", "06_billing", "07_maintenance", "08_promotions", "09_reviews", "10_reports" })
                 await Sql(cs, await File.ReadAllTextAsync($"database/migrations/{module}/001_schema.sql"));
             await Sql(cs, "INSERT LoaiXe VALUES('SEDAN',N'Sedan','B');");
-            var input = new VehicleInput("XE1", "SEDAN", "Xe thử", "Toyota", "51A-12345", "Đen", 2024, 5, "Tự động", "Bãi A", "SanSang", ["https://example.com/car.png"]);
+            var input = new VehicleInput("XE1", "SEDAN", "Xe thử", "Toyota", "51A-12345", "Trắng", 2024, 5, "Tự động", "Bãi A", "SanSang", ["https://example.com/car.png"]);
             await using (var db = Db())
             {
-                var fleet = new FleetService(db); await fleet.Save(input, true);
+                var fleet = new FleetService(db); await fleet.Save(input with { Name = "  Xe   thử  ", Plate = " 51a- 12345 ", Parking = "  Bãi   A  " }, true);
                 Check(await db.Set<VehicleImage>().CountAsync() == 1, "lưu hồ sơ xe và ảnh");
             }
-            await using (var db = Db()) { await new FleetService(db).Save(input with { Name = "Xe cập nhật", Images = [] }, false); Check(!await db.Set<VehicleImage>().AnyAsync(), "sửa hồ sơ và danh sách ảnh"); }
+            await using (var db = Db())
+            {
+                var saved = await db.Set<Vehicle>().AsNoTracking().SingleAsync();
+                Check(saved.Color == "Trắng", "màu xe giữ dấu tiếng Việt sau khi tạo");
+                Check(saved.Name == "Xe thử" && saved.Plate == "51A-12345" && saved.Parking == "Bãi A", "database lưu tên, biển số và vị trí đã chuẩn hóa");
+            }
+            await using (var db = Db()) { await new FleetService(db).Save(input with { Name = "Xe cập nhật", Color = "Đỏ đô", Images = [] }, false); Check(!await db.Set<VehicleImage>().AnyAsync(), "sửa hồ sơ và danh sách ảnh"); }
+            await using (var db = Db()) { Check((await db.Set<Vehicle>().AsNoTracking().SingleAsync()).Color == "Đỏ đô", "màu xe giữ dấu tiếng Việt sau khi cập nhật"); }
             await using (var db = Db()) { Check(await new FleetService(db).Filter("51A", null, "SEDAN").CountAsync() == 1, "lọc xe theo biển số và loại"); }
-            await using (var db = Db()) { await Reject(() => new FleetService(db).Save(input with { Id = "XE2" }, true), "chặn trùng biển số"); }
+            await using (var db = Db()) { await Reject(() => new FleetService(db).Save(input with { Id = "XE2", Plate = " 51a-\t12345 " }, true), "chặn biển số trùng dù khác khoảng trắng và chữ hoa"); }
             await using (var db = Db()) { await new FleetService(db).Save(input with { Id = "TEMP", Plate = "TEMP" }, true); Check(!await new FleetService(db).Delete("TEMP"), "xóa vật lý xe chưa có lịch sử"); }
 
             var now = clock.GetUtcNow().UtcDateTime;

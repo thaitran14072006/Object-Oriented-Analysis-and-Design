@@ -55,4 +55,8 @@ if [[ -n "$missing" ]]; then
     exit 1
 fi
 
+for upgrade in /upgrades/*.sql; do
+    sql -d CarRental -f 65001 -i "$upgrade"
+done
+
 printf 'CarRental schema ready: %s expected tables found.\n' "$(printf '%s\n' "$expected" | wc -l)"

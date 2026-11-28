@@ -1,4 +1,5 @@
 using System.Data;
+using System.Text.RegularExpressions;
 using CarRental.Web.Areas.Fleet.Data;
 using CarRental.Web.Areas.Maintenance.Data;
 using CarRental.Web.Areas.Billing.Services;
@@ -36,17 +37,38 @@ public sealed class FleetService(RentalDbContext db)
 
     public static void Validate(VehicleInput input)
     {
-        BillingService.Require(input.Year >= 1900 && input.Year <= DateTime.Today.Year, "Năm sản xuất không hợp lệ.");
-        BillingService.Require(input.Seats is > 0 and <= 100 && input.Status is "SanSang" or "NgungKhaiThac", "Thông tin xe không hợp lệ.");
+        input = Normalize(input);
+        BillingService.Require(input.Year >= 2000 && input.Year <= DateTime.Today.Year, $"Năm sản xuất phải từ 2000 đến {DateTime.Today.Year}.");
+        BillingService.Require(input.Seats is >= 4 and <= 16, "Số chỗ phải từ 4 đến 16.");
+        BillingService.Require(input.Status is "SanSang" or "NgungKhaiThac", "Thông tin xe không hợp lệ.");
         BillingService.Require(new[] { input.Name, input.TypeId, input.Brand, input.Plate, input.Color, input.Transmission }.All(x => !string.IsNullOrWhiteSpace(x)), "Nhập đủ thông tin xe.");
+        BillingService.Require(input.Transmission is "Số sàn" or "Tự động", "Chọn hộp số Số sàn hoặc Tự động.");
+        BillingService.Require(Regex.IsMatch(input.Plate, @"\A[A-Z0-9]+(?:[-.][A-Z0-9]+)*\z") && input.Plate.Length <= 20,
+            "Biển số chỉ gồm chữ, số, dấu gạch ngang hoặc dấu chấm.");
+        BillingService.Require(input.Name.Length <= 100 && input.Brand.Length <= 80 && input.Color.Length <= 40,
+            "Tên xe, hãng xe hoặc màu sắc vượt quá độ dài cho phép.");
+        BillingService.Require(input.Parking is null or "Bãi A" or "Bãi B" or "Bãi C", "Chọn vị trí đỗ là Bãi A, Bãi B hoặc Bãi C.");
         BillingService.Require(input.Images != null && input.Images.Length <= 12, "Mỗi xe có tối đa 12 ảnh.");
         foreach (var url in input.Images!)
             BillingService.Require(url != null && url.Length <= 500 && Uri.TryCreate(url, UriKind.Absolute, out var uri)
                 && uri.Scheme is "https" or "http", "Đường dẫn ảnh phải là địa chỉ HTTP hoặc HTTPS hợp lệ.");
     }
 
+    public static VehicleInput Normalize(VehicleInput input)
+    {
+        static string Clean(string? value) => Regex.Replace(value?.Trim() ?? "", @"\s+", " ");
+        var parking = Clean(input.Parking);
+        return input with
+        {
+            Name = Clean(input.Name), Brand = Clean(input.Brand), Color = Clean(input.Color),
+            Plate = Regex.Replace(input.Plate ?? "", @"\s+", "").ToUpperInvariant(),
+            Transmission = Clean(input.Transmission), Parking = parking.Length == 0 ? null : parking
+        };
+    }
+
     public async Task Save(VehicleInput input, bool creating)
     {
+        input = Normalize(input);
         Validate(input);
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         await new VehicleAvailability(db).Lock(input.Id);

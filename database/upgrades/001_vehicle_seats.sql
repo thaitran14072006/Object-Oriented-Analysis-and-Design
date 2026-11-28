@@ -1,0 +1,9 @@
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+IF EXISTS (SELECT 1 FROM dbo.Xe WITH (TABLOCKX,HOLDLOCK) WHERE soChoNgoi NOT BETWEEN 4 AND 16)
+    THROW 51001, 'Xe has seat counts outside 4-16. Correct these records before upgrading.', 1;
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Xe') AND name=N'CK_Xe_SoCho')
+    ALTER TABLE dbo.Xe DROP CONSTRAINT CK_Xe_SoCho;
+ALTER TABLE dbo.Xe WITH CHECK ADD CONSTRAINT CK_Xe_SoCho CHECK(soChoNgoi BETWEEN 4 AND 16);
+COMMIT TRANSACTION;
+GO

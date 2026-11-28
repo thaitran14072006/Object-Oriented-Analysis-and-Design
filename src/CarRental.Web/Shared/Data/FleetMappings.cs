@@ -52,7 +52,7 @@ public static class FleetMappings
             var names = pair.Split(':');
             var property = entity.Property(names[0]).HasColumnName(names[1]);
             if (typeof(T).GetProperty(names[0])!.PropertyType != typeof(string)) continue;
-            var identifier = names[1].StartsWith("ma");
+            var identifier = names[1].StartsWith("ma") && names[1].Length > 2 && char.IsUpper(names[1][2]);
             property.HasMaxLength(identifier ? 20 : 1000).IsUnicode(!identifier);
             if (names[0] is "Status" or "Kind" or "LicenseClass") property.HasMaxLength(20).IsUnicode(false);
         }

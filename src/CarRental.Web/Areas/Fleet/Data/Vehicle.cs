@@ -41,7 +41,7 @@ public sealed record VehicleInput(
     [Required, StringLength(20)] string Plate,
     [Required, StringLength(40)] string Color,
     short Year,
-    [Range(1, 100)] short Seats,
+    [Range(4, 16, ErrorMessage = "Số chỗ phải từ 4 đến 16.")] short Seats,
     [Required, StringLength(30)] string Transmission,
     [StringLength(255)] string? Parking,
     [Required, RegularExpression("^(SanSang|NgungKhaiThac)$")] string Status,

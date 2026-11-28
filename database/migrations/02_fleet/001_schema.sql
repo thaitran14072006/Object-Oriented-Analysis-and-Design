@@ -8,8 +8,8 @@ CREATE TABLE Xe (
     maLoaiXe varchar(20) NOT NULL REFERENCES LoaiXe(maLoaiXe),
     tenXe nvarchar(100) NOT NULL, hangXe nvarchar(80) NOT NULL,
     bienSo varchar(20) NOT NULL UNIQUE, mauSac nvarchar(40) NOT NULL,
-    namSanXuat smallint NOT NULL CHECK(namSanXuat BETWEEN 1900 AND YEAR(GETDATE())),
-    soChoNgoi smallint NOT NULL CHECK(soChoNgoi>0), loaiHopSo nvarchar(30) NOT NULL,
+    namSanXuat smallint NOT NULL CONSTRAINT CK_Xe_NamSanXuat CHECK(namSanXuat BETWEEN 2000 AND YEAR(GETDATE())),
+    soChoNgoi smallint NOT NULL CONSTRAINT CK_Xe_SoCho CHECK(soChoNgoi BETWEEN 4 AND 16), loaiHopSo nvarchar(30) NOT NULL,
     tinhTrang varchar(25) NOT NULL DEFAULT 'SanSang'
         CHECK(tinhTrang IN ('SanSang','DangChoThue','DangBaoTri','NgungKhaiThac')),
     viTriDo nvarchar(255) NULL, daXoa bit NOT NULL DEFAULT 0,

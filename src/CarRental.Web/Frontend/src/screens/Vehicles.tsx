@@ -13,6 +13,8 @@ export function Vehicles() {
   const params = new URLSearchParams({ q: query, status, type, archived: String(archived) })
   const records = useResource<Vehicle[]>(`fleet?${params}`), types = useResource<VehicleType[]>('fleet/types')
   const rows = records.data || [], typeOptions = (types.data || []).map(t => ({ value: t.id, label: t.name }))
+  const parkingOptions = ['Bãi A', 'Bãi B', 'Bãi C'].map(value => ({ value, label: value }))
+  const oldParking = editor?.parking && !parkingOptions.some(p => p.value === editor.parking) ? String(editor.parking) : ''
   async function act(work: () => Promise<void>) { setBusy(true); setMessage(''); try { await work() } catch (e) { setMessage((e as Error).message) } finally { setBusy(false) } }
   async function open(id: string, edit: boolean) {
     await act(async () => {
@@ -25,9 +27,10 @@ export function Vehicles() {
     { key: 'id', label: 'Mã xe', maxLength: 20, readOnly: !creating }, { key: 'typeId', label: 'Loại xe', options: typeOptions },
     { key: 'name', label: 'Tên xe', maxLength: 100 }, { key: 'brand', label: 'Hãng xe', maxLength: 80 },
     { key: 'plate', label: 'Biển số', maxLength: 20 }, { key: 'color', label: 'Màu sắc', maxLength: 40 },
-    { key: 'year', label: 'Năm sản xuất', type: 'number', min: 1900, max: new Date().getFullYear() },
-    { key: 'seats', label: 'Số chỗ', type: 'number', min: 1, max: 100 }, { key: 'transmission', label: 'Hộp số', maxLength: 30 },
-    { key: 'parking', label: 'Vị trí đỗ', optional: true, maxLength: 255 },
+    { key: 'year', label: `Năm sản xuất (2000–${new Date().getFullYear()})`, type: 'number', min: 2000, max: new Date().getFullYear() },
+    { key: 'seats', label: 'Số chỗ (4–16)', type: 'number', min: 4, max: 16 },
+    { key: 'transmission', label: 'Hộp số', options: ['Số sàn', 'Tự động'].map(value => ({ value, label: value })) },
+    { key: 'parking', label: 'Vị trí đỗ', optional: !oldParking, options: parkingOptions },
     { key: 'status', label: 'Tình trạng', options: ['SanSang', 'NgungKhaiThac'].map(s => ({ value: s, label: statusNames[s] })) },
     { key: 'images', label: 'Đường dẫn ảnh (mỗi dòng một ảnh)', type: 'textarea', optional: true, maxLength: 6012 },
   ]
@@ -50,6 +53,7 @@ export function Vehicles() {
         {!v.archived && <><button className="underline" disabled={busy || !['SanSang', 'NgungKhaiThac'].includes(v.status)} onClick={() => void open(v.id, true)}>Sửa</button>
           <button className="text-red-700 underline" disabled={busy} onClick={() => { if (window.confirm(`Xóa xe ${v.plate}? Xe có lịch sử sẽ được lưu trữ.`)) void act(async () => { const result = await request<{ archived: boolean }>(`fleet/${encodeURIComponent(v.id)}`, 'DELETE'); records.reload(); setDetail(undefined); setEditor(undefined); setMessage(result.archived ? 'Đã lưu trữ hồ sơ xe.' : 'Đã xóa xe.') }) }}>Xóa</button></>}
       </div>])} />
+    {oldParking && <p className="mt-4 text-sm text-amber-700">Vị trí đỗ cũ: {oldParking}. Chọn lại bãi trước khi lưu hồ sơ.</p>}
     {editor && <RecordForm key={creating ? 'new' : String(editor.id)} title={creating ? 'Thêm xe' : 'Cập nhật xe'} fields={fields} values={editor} cancel={() => setEditor(undefined)} save={async data => {
       const body = { ...data, images: String(data.images || '').split('\n').map(s => s.trim()).filter(Boolean) }
       await request(creating ? 'fleet' : `fleet/${encodeURIComponent(String(data.id))}`, creating ? 'POST' : 'PUT', body)

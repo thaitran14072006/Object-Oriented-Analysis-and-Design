@@ -7,7 +7,7 @@ IF NOT EXISTS(SELECT 1 FROM LoaiXe WHERE maLoaiXe='NHU_SEDAN')
  INSERT LoaiXe(maLoaiXe,tenLoaiXe,hangGPLXYeuCau) VALUES('NHU_SEDAN',N'Sedan demo Như','B');
 IF NOT EXISTS(SELECT 1 FROM Xe WHERE maXe='NHU_XE01')
  INSERT Xe(maXe,maLoaiXe,tenXe,hangXe,bienSo,mauSac,namSanXuat,soChoNgoi,loaiHopSo,tinhTrang,viTriDo,daXoa)
- VALUES('NHU_XE01','NHU_SEDAN',N'Toyota Vios demo','Toyota','DEMO-NHU-01',N'Trắng',2024,5,N'Tự động','SanSang',N'Bãi demo',0);
+ VALUES('NHU_XE01','NHU_SEDAN',N'Toyota Vios demo','Toyota','DEMO-NHU-01',N'Trắng',2024,5,N'Tự động','SanSang',N'Bãi A',0);
 IF NOT EXISTS(SELECT 1 FROM MucGiaThue WHERE maMucGia='NHU_GIA01')
  INSERT MucGiaThue(maMucGia,maLoaiXe,donViTinh,hinhThuc,muaVu,donGia,batDau,ketThuc,conSuDung)
  VALUES('NHU_GIA01','NHU_SEDAN','NGAY','NGAN_HAN','MAC_DINH',500000,@start,@finish,1);

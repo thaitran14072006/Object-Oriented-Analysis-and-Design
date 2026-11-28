@@ -27,6 +27,7 @@ services:
       SQLCMDPASSWORD: "${MSSQL_SA_PASSWORD:?Chay Start-Docker.ps1 de tao .env}"
     volumes:
       - ./database/migrations:/migrations:ro
+      - ./database/upgrades:/upgrades:ro
       - ./scripts/docker/prepare-db.sh:/init/prepare-db.sh:ro
     entrypoint: ["/bin/bash", "/init/prepare-db.sh"]
     restart: "no"
