@@ -68,3 +68,7 @@ Kiểm thử ứng dụng vẫn chạy trên cơ sở dữ liệu tạm LocalDB.
 ## Xác minh Docker ngày 28 tháng 11 năm 2026
 
 Đã chạy web và SQL Server container thật, tạo đủ 33 bảng, kiểm tra cọc–hóa đơn–gia hạn–thu đủ tiền–báo cáo và đăng xuất, rồi xác minh dữ liệu sau restart web. Các kiểm tra đều đạt. Xem [nhu-docker-result.md](nhu-docker-result.md) để biết môi trường, số tiền và lệnh chạy lại. Kết quả này cập nhật giới hạn trước đó khi Docker Engine chưa chạy.
+
+## Hồ sơ bàn giao và duyệt độc lập
+
+Đã có [tài liệu bàn giao kèm ảnh minh chứng](nhu-handover.md): ghi rõ commit kiểm tra, kết quả tự kiểm tra, ba ảnh chụp giao diện và checklist để thành viên khác chạy lại. Các ô người duyệt và xác nhận còn để trống; không coi việc tự kiểm tra là duyệt độc lập.
