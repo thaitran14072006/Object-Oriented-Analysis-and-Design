@@ -6,10 +6,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CarRental.Web.Areas.Maintenance.Controllers;
 
-[Area("Maintenance"), ApiController, Route("api/maintenance"), Authorize(Policy = "BillingAdmin")]
+[Area("Maintenance"), ApiController, Route("api/maintenance"), Authorize(Policy = "Maintenance.Access")]
 public sealed class MaintenanceController(MaintenanceService service) : ControllerBase
 {
     private string Admin => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    [HttpGet("vehicles")] public async Task<IActionResult> Vehicles() => Ok(await service.Vehicles());
     [HttpGet] public async Task<IActionResult> List(string? q, string? status, string? vehicle) => Ok(await service.List(q, status, vehicle));
     [HttpGet("{id}")] public async Task<IActionResult> Detail(string id) => Ok(await service.Detail(id));
     [HttpPost] public async Task<IActionResult> Create(MaintenanceInput input) => StatusCode(201, new { id = await service.Create(input, Admin) });

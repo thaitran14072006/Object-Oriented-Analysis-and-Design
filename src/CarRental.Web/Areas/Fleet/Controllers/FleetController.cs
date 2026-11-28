@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CarRental.Web.Areas.Fleet.Controllers;
 
-[Area("Fleet"), ApiController, Route("api/fleet"), Authorize(Policy = "BillingAdmin")]
+[Area("Fleet"), ApiController, Route("api/fleet"), Authorize(Policy = "Fleet.Access")]
 public sealed class FleetController(FleetService service) : ControllerBase
 {
     [HttpGet] public async Task<IActionResult> List(string? q, string? status, string? type, bool archived = false)

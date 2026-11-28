@@ -15,7 +15,7 @@ export function Maintenance() {
   const [creating, setCreating] = useState(false), [selected, setSelected] = useState('')
   const params = new URLSearchParams(); if (query) params.set('q', query); if (status) params.set('status', status); if (vehicle) params.set('vehicle', vehicle)
   const records = useResource<RecordRow[]>(`maintenance?${params}`)
-  const vehicles = useResource<{ id: string; name: string; plate: string; status: string }[]>('fleet')
+  const vehicles = useResource<{ id: string; name: string; plate: string; status: string }[]>('maintenance/vehicles')
   const rows = records.data || [], options = (vehicles.data || []).map(v => ({ value: v.id, label: `${v.name} — ${v.plate}` }))
   return <div><PageHeader title="Quản lý bảo trì xe" desc="Lịch bảo dưỡng, tiến độ và kiểm tra an toàn" />
     <div className="mb-5 grid gap-3 sm:grid-cols-4">{[

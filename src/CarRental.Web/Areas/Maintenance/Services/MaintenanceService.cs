@@ -12,6 +12,10 @@ public sealed class MaintenanceService(RentalDbContext db, TimeProvider clock)
 {
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 
+    public async Task<object> Vehicles() => await db.Set<Vehicle>().AsNoTracking()
+        .Where(x => !x.Archived && x.Status != "NgungKhaiThac")
+        .OrderBy(x => x.Id).Select(x => new { x.Id, x.Name, x.Plate, x.Status }).ToListAsync();
+
     public async Task<object> List(string? q, string? status, string? vehicle)
     {
         var rows = from record in db.Set<MaintenanceRecord>().AsNoTracking()

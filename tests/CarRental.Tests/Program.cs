@@ -17,5 +17,6 @@ Check(!sql.Contains("CREATE TABLE [DonThue]"), "không tạo lại bảng của 
 if (args.Contains("integration")) await Integration.Run();
 BookingChecks.Run();
 OperationsChecks.Run();
+await ModuleAccessChecks.Run();
 if (args.Contains("operations")) await OperationsIntegration.Run();
 if (args.Contains("billing-flow")) await BillingFlowIntegration.Run(args.Contains("preview"));

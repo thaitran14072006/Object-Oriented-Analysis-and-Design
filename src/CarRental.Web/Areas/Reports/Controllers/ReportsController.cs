@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CarRental.Web.Areas.Reports.Controllers;
 
-[Area("Reports"), ApiController, Route("api/reports"), Authorize(Policy = "BillingAdmin")]
+[Area("Reports"), ApiController, Route("api/reports"), Authorize(Policy = "Reports.Access")]
 public sealed class ReportsController(ReportService service, PeriodicReportService periodic) : ControllerBase
 {
     [HttpGet] public async Task<IActionResult> Get(string type, DateOnly from, DateOnly to) => Ok(await service.Build(type, from, to));

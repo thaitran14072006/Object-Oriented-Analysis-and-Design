@@ -57,6 +57,11 @@ public sealed class PeriodicReportWorker(IServiceScopeFactory scopes, IConfigura
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!configuration.GetValue<bool>("Reports:Enabled")) return;
+        if (string.IsNullOrWhiteSpace(configuration.GetConnectionString("CarRental")))
+        {
+            logger.LogWarning("Chưa cấu hình ConnectionStrings:CarRental. Tạm bỏ qua báo cáo định kỳ.");
+            return;
+        }
         using var timer = new PeriodicTimer(TimeSpan.FromHours(1), clock);
         do
         {
